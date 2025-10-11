@@ -6,19 +6,19 @@
     "start": "next start"
   },
   "dependencies": {
-    "@tailwindcss/postcss": "4.1.13",
-    "@types/node": "24.5.2",
-    "@types/react": "19.1.13",
-    "@types/react-dom": "19.1.9",
+    "@tailwindcss/postcss": "4.1.14",
+    "@types/node": "24.7.0",
+    "@types/react": "19.2.0",
+    "@types/react-dom": "19.2.0",
     "geist": "1.5.1",
     "next": "canary",
     "next-mdx-remote": "^5.0.0",
     "postcss": "^8.5.6",
-    "react": "19.1.1",
-    "react-dom": "19.1.1",
+    "react": "19.2.0",
+    "react-dom": "19.2.0",
     "sugar-high": "^0.9.3",
-    "tailwindcss": "4.1.13",
-    "typescript": "5.9.2"
+    "tailwindcss": "4.1.14",
+    "typescript": "5.9.3"
   },
   "packageManager": "pnpm@9.15.2+sha512.93e57b0126f0df74ce6bff29680394c0ba54ec47246b9cf321f0121d8d9bb03f750a705f24edc3c1180853afd7c2c3b94196d0a3d53d3e069d9e2793ef11f321"
 }
