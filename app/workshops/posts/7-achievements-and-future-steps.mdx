@@ -15,6 +15,150 @@ You've successfully completed the Cloud-Native DevOps workshop! Your application
 - ✓ Routed efficiently by Traefik
 - ✓ Running on a production-ready Kubernetes cluster
 
+## Testing Your Complete CI/CD Pipeline
+
+Now let's test your entire pipeline by making a code change and watching it flow through your CI/CD system!
+
+### Step 1: Make a Code Change
+
+Let's personalize your FurNet animal! Edit your animal configuration:
+
+```bash
+# Navigate to your furnet directory
+cd ~/furnet
+
+# Open the animal config file
+vim backend/config.py
+```
+
+Find the `AnimalConfig` class and customize your animal:
+
+```python
+class AnimalConfig:
+    # Animal Identity - Fixed Fields (Required)
+    animal_name: str = "Your Animal Name"  # Change this!
+    animal_species: str = "Your Species"   # Change this!
+    animal_description: str = "A description of your animal"  # Change this!
+
+    # Optional Fields - customize these too!
+    animal_habitat: Optional[str] = "Where your animal lives"
+    animal_diet: Optional[str] = "What your animal eats"
+    animal_fun_fact: Optional[str] = "Something interesting about your animal"
+    animal_emoji: Optional[str] = "🦊"  # Pick your favorite emoji!
+    animal_color: Optional[str] = "your-color"
+```
+
+Save the file (Ctrl+O, Enter, Ctrl+X in nano).
+
+### Step 2: Commit and Push
+
+Now commit your changes and push them to GitHub:
+
+```bash
+# Check what changed
+git status
+git diff backend/config.py
+
+# Stage and commit your changes
+git add backend/config.py
+git commit -m "feat: update animal configuration to [Your Animal]"
+
+# Push to GitHub (this triggers the CI/CD pipeline!)
+git push origin main
+```
+
+**What happens now:** Your push to `main` triggers the GitHub Actions workflow to build new Docker images.
+
+### Step 3: Watch the GitHub Action Build
+
+Open your browser and watch the build process:
+
+1. Go to your GitHub repository
+2. Click on the **Actions** tab
+3. You should see a new workflow run called "Build and Push Docker Images"
+4. Click on it to watch the progress
+
+You'll see these steps execute:
+- ✓ Checkout repository
+- ✓ Set up Docker Buildx
+- ✓ Log in to GitHub Container Registry
+- ✓ Extract metadata for Backend/Frontend
+- ✓ Build and push Backend Docker image
+- ✓ Build and push Frontend Docker image
+
+**Wait for the green checkmark!** This means your new images are built and pushed to GitHub Container Registry.
+
+### Step 4: Deploy the New Images to k3s
+
+Your new images are built, but your k3s cluster is still running the old ones. Let's update it!
+
+SSH into your cloud VM:
+
+```bash
+# Replace 0 with your participant number (0, 1, 2, etc.)
+ssh ubuntu@dj-viscon-workshop-0.vsos.ethz.ch
+```
+
+**Why is this step needed?** Your Kubernetes deployment is configured with `imagePullPolicy: Always`, which means it will always try to pull the latest image. However, Kubernetes doesn't automatically know when a new image with the same tag (like `latest`) has been pushed to the registry. The `rollout restart` command tells Kubernetes to recreate the pods, which triggers a fresh image pull.
+
+Now trigger a rollout restart to pull the new images:
+
+```bash
+# Restart the backend deployment (contains your animal config)
+kubectl rollout restart deployment furnet-backend
+
+# Restart the frontend too (for good measure)
+kubectl rollout restart deployment furnet-frontend
+```
+
+**What this does:** Kubernetes will gracefully terminate the old pods and create new ones. During pod creation, it pulls the latest images from GitHub Container Registry (ghcr.io) with your updated animal configuration.
+
+Watch the rollout happen:
+
+```bash
+# Watch pods being recreated
+kubectl get pods -w
+
+# Press Ctrl+C when you see the new pods running
+```
+
+You should see:
+1. Old pods terminating (`Terminating` state)
+2. New pods being created (`ContainerCreating` state)
+3. New pods running (`Running` state)
+
+### Step 5: Verify Your Changes
+
+Visit your application in the browser:
+
+```
+https://yourname.furnet.example.com
+```
+
+Check the `/api/me` endpoint to see your updated animal:
+
+```
+https://yourname.furnet.example.com/api/me
+```
+
+You should see your new animal configuration! 🎉
+
+**Troubleshooting:**
+- **Still seeing old config?** Check that the GitHub Action completed successfully
+- **Pods not starting?** Run `kubectl describe pod <pod-name>` to see errors
+- **Can't pull image?** Verify the image exists in GitHub Container Registry
+
+### Understanding the Full Pipeline
+
+You just experienced a complete CI/CD flow:
+
+1. **Code Change** → Edit `backend/config.py`
+2. **Version Control** → `git commit` and `git push`
+3. **Continuous Integration** → GitHub Actions builds Docker images
+4. **Container Registry** → Images pushed to GitHub Container Registry (ghcr.io)
+5. **Continuous Deployment** → `kubectl rollout restart` pulls new images
+6. **Live Application** → Your changes are now running in production!
+
 ## What You've Accomplished
 
 Through this workshop, you've built a complete DevOps pipeline from scratch:
@@ -24,18 +168,18 @@ Through this workshop, you've built a complete DevOps pipeline from scratch:
 3. **Deployment**: Created Kubernetes Deployments and Services
 4. **Networking**: Exposed your application with Traefik Ingress
 5. **Security**: Automated SSL certificate management with cert-manager
-
-Every time you push code changes to GitHub, your images rebuild automatically. You can then deploy the updated images to your cluster with a simple `kubectl apply`.
+6. **Pipeline Testing**: Successfully deployed code changes through the entire stack!
 
 ## Next Steps
 
 Want to take your DevOps skills further? Here are some ideas:
 
-**Automation:**
-- Set up automatic deployment on every code push using GitHub Actions
+**Full Automation:**
+- Automatically rollout the new images in k3s
 
-**Monitoring:**
+**Monitoring & Observability:**
 - Install Prometheus and Grafana for metrics
+
 
 ## Thank You!
 
