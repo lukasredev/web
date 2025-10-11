@@ -15,7 +15,7 @@ In this guide, we'll build a GitHub Actions workflow step-by-step that builds bo
 - How GitHub Actions workflows work and why they're powerful
 - Authentication with GitHub Container Registry
 - Building multiple Docker images in one workflow
-- Automatic image tagging strategies (including semantic versioning)
+- Automatic image tagging with branch and commit
 - Caching for fast builds
 
 ## Prerequisites
@@ -72,10 +72,10 @@ This is a special directory that GitHub recognizes. Any YAML file in this direct
 
 ## Step 3: Create the Workflow File
 
-Create a new file for the Docker build workflow:
+Create a new file for the Docker build workflow using your favorite editor (e.g., vim):
 
 ```bash
-nano .github/workflows/docker-publish.yml
+vim .github/workflows/docker-publish.yml
 ```
 
 **Naming Convention:**
@@ -97,8 +97,6 @@ on:
   push:
     branches:
       - main
-    tags:
-      - "v*"
 ```
 
 **Breaking it down:**
@@ -106,12 +104,10 @@ on:
 - `name: Build and Push Docker Images`: The display name shown in GitHub's Actions tab
 - `on:`: Defines the events that trigger this workflow
   - `push.branches: main`: Triggers when you push commits to the main branch
-  - `push.tags: "v*"`: Triggers when you push tags starting with "v" (e.g., v1.0.0, v2.1.3)
 
-**Why both branches and tags?**
+**How it works:**
 
-- **Branch pushes**: For continuous development—every commit builds new images
-- **Version tags**: For releases—tag your code with v1.0.0 and get properly versioned images
+Every time you push to main, the workflow automatically builds new Docker images tagged with the branch name and commit SHA. This keeps things simple and predictable.
 
 ---
 
@@ -243,8 +239,6 @@ Now we'll generate tags and labels for the backend image:
           tags: |
             type=ref,event=branch
             type=sha,prefix={{branch}}-
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
             type=raw,value=latest,enable={{is_default_branch}}
 ```
 
@@ -254,8 +248,6 @@ This step automatically generates multiple tags based on your Git activity:
 
 - `type=ref,event=branch`: Tag with branch name (e.g., `main`)
 - `type=sha,prefix={{branch}}-`: Tag with git commit SHA (e.g., `main-abc1234`)
-- `type=semver,pattern={{version}}`: Full semantic version from git tags (e.g., `1.2.3`)
-- `type=semver,pattern={{major}}.{{minor}}`: Major.minor version (e.g., `1.2`)
 - `type=raw,value=latest`: Tag as `latest` only on the default branch
 
 **Example:** When you push to main with commit `abc1234`, you get:
@@ -263,17 +255,12 @@ This step automatically generates multiple tags based on your Git activity:
 - `ghcr.io/username/furnet/backend:main-abc1234`
 - `ghcr.io/username/furnet/backend:latest`
 
-**Example:** When you tag a release as `v1.0.0`, you get:
-- `ghcr.io/username/furnet/backend:1.0.0`
-- `ghcr.io/username/furnet/backend:1.0`
-- All the branch-based tags too
-
 **Why multiple tags?**
 
 Different deployment scenarios need different tags:
-- `latest`: For development and testing
-- `main-abc1234`: For tracking specific commits
-- `1.0.0`: For production releases
+- `latest`: For quick testing with the newest build
+- `main`: For deploying the latest main branch build
+- `main-abc1234`: For tracking and deploying specific commits
 
 The `id: meta-backend` saves these outputs so we can reference them in the build step.
 
@@ -292,8 +279,6 @@ Add a similar metadata step for the frontend:
           tags: |
             type=ref,event=branch
             type=sha,prefix={{branch}}-
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
             type=raw,value=latest,enable={{is_default_branch}}
 ```
 
@@ -301,7 +286,7 @@ Add a similar metadata step for the frontend:
 
 Backend and frontend are completely independent images with their own lifecycles. This generates tags like:
 - `ghcr.io/username/furnet/frontend:main`
-- `ghcr.io/username/furnet/frontend:1.0.0`
+- `ghcr.io/username/furnet/frontend:main-abc1234`
 - `ghcr.io/username/furnet/frontend:latest`
 
 Notice the only difference from the backend step is `meta-frontend` and `/frontend` in the image path.
@@ -399,8 +384,6 @@ on:
   push:
     branches:
       - main
-    tags:
-      - "v*"
 
 env:
   REGISTRY: ghcr.io
@@ -436,8 +419,6 @@ jobs:
           tags: |
             type=ref,event=branch
             type=sha,prefix={{branch}}-
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
             type=raw,value=latest,enable={{is_default_branch}}
 
       - name: Extract metadata for Frontend
@@ -448,8 +429,6 @@ jobs:
           tags: |
             type=ref,event=branch
             type=sha,prefix={{branch}}-
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
             type=raw,value=latest,enable={{is_default_branch}}
 
       - name: Build and push Backend Docker image
@@ -589,7 +568,7 @@ Now that you've built the workflow, let's understand how everything flows togeth
 3. **Code checkout** → Your repository is cloned
 4. **Buildx setup** → Docker build environment is prepared
 5. **Registry login** → Authenticates with GHCR using auto-generated token
-6. **Metadata generation** → Creates appropriate tags based on branch/tag
+6. **Metadata generation** → Creates appropriate tags based on branch and commit
 7. **Backend build** → Builds from `./backend/Dockerfile`, using cache if available
 8. **Backend push** → Pushes all tagged versions to GHCR
 9. **Frontend build** → Builds from `./frontend/Dockerfile`, using cache
@@ -597,29 +576,6 @@ Now that you've built the workflow, let's understand how everything flows togeth
 11. **Workflow complete** → Images are ready to deploy!
 
 **From your perspective:** Push code, wait a few minutes, pull updated images.
-
----
-
-## Testing the Versioning System
-
-To create a versioned release:
-
-```bash
-# Tag your current commit with a version
-git tag v1.0.0
-
-# Push the tag to GitHub
-git push origin v1.0.0
-```
-
-This triggers the workflow again, and you'll get images tagged with:
-- `1.0.0`
-- `1.0`
-- `latest`
-- `main`
-- `main-abc1234`
-
-Check your packages page to see all the version tags!
 
 ---
 
@@ -747,7 +703,7 @@ With automated Docker image builds in place, you're ready to set up your Kuberne
 **What you've accomplished:**
 - ✓ Created a complete CI/CD pipeline for building container images
 - ✓ Automated building of both backend and frontend
-- ✓ Implemented intelligent tagging (latest, versioned, commit-specific)
+- ✓ Implemented intelligent tagging (branch, commit, and latest)
 - ✓ Set up layer caching for fast builds
 - ✓ Published images to GitHub Container Registry
 
