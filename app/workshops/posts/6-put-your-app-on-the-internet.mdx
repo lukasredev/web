@@ -1,0 +1,644 @@
+---
+title: 'Step 6 - Put Your App on the Internet - VIScon 2025 Workshop'
+publishedAt: '2025-10-11'
+summary: 'Expose your application to the internet with automatic HTTPS using Traefik, cert-manager, and Let\'s Encrypt.'
+---
+
+# Put Your App on the Internet
+
+Now that your k3s cluster is running, it's time to expose your application to the world. In this guide, you'll install cert-manager for automatic SSL certificates, then create an Ingress resource that routes traffic to your application with HTTPS enabled. By the end, your app will be accessible via a secure HTTPS URL with a valid Let's Encrypt certificate.
+
+## Understanding the Architecture
+
+Before we dive in, let's understand how traffic flows to your application:
+
+1. **DNS**: Your domain points to your VM's IP address
+2. **Traefik**: k3s's built-in ingress controller receives incoming HTTP/HTTPS requests
+3. **Ingress Resource**: Defines routing rules (which domain goes to which service)
+4. **cert-manager**: Automatically obtains and renews SSL certificates from Let's Encrypt
+5. **Your Application**: Receives the routed traffic
+
+## Prerequisites
+
+Before starting, ensure you have:
+- A working k3s cluster (completed in Step 4)
+- kubectl configured to access your cluster
+- Your application deployed in Kubernetes (Deployment + Service)
+- Your VM connected via SSH
+
+For this workshop, you'll use: `dj-viscon-workshop-X.vsos.ethz.ch` (replace X with your participant number)
+
+Verify your cluster is ready:
+
+```bash
+kubectl get nodes
+```
+
+You should see your node in `Ready` status.
+
+## Part 1: Install cert-manager
+
+cert-manager is a powerful Kubernetes add-on that automates the management and issuance of TLS certificates. It will handle requesting, renewing, and managing certificates from Let's Encrypt automatically.
+
+### Step 1: Install cert-manager
+
+cert-manager provides official Kubernetes manifests for easy installation. Apply the latest version:
+
+```bash
+kubectl apply -f https://github.com/cert-manager/cert-manager/releases/download/v1.13.2/cert-manager.yaml
+```
+
+This single command creates:
+- A new `cert-manager` namespace
+- Custom Resource Definitions (CRDs) for certificates and issuers
+- The cert-manager controller and webhook components
+
+**Installing a different version (optional):**
+
+Check available versions at [github.com/cert-manager/cert-manager/releases](https://github.com/cert-manager/cert-manager/releases) and replace the version number in the URL above.
+
+### Step 2: Verify cert-manager Installation
+
+cert-manager creates three main deployments. Wait for all pods to be ready:
+
+```bash
+kubectl get pods -n cert-manager
+```
+
+You should see three pods running:
+- `cert-manager-xxxxx`
+- `cert-manager-cainjector-xxxxx`
+- `cert-manager-webhook-xxxxx`
+
+All should show `1/1` in the READY column and `Running` status. This may take 1-2 minutes.
+
+Verify the installation is healthy:
+
+```bash
+kubectl get deployments -n cert-manager
+```
+
+All deployments should show `READY 1/1` and `AVAILABLE 1`.
+
+### Step 3: Create a Let's Encrypt Issuer
+
+cert-manager needs an "Issuer" to know where to request certificates from. We'll create a ClusterIssuer for Let's Encrypt, which provides free SSL certificates trusted by all browsers.
+
+**Important**: Replace `your-email@example.com` with your actual email address—Let's Encrypt uses this for certificate expiration notifications.
+
+Create a ClusterIssuer for Let's Encrypt:
+
+```bash
+cat <<EOF | kubectl apply -f -
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: letsencrypt-prod
+spec:
+  acme:
+    server: https://acme-v02.api.letsencrypt.org/directory
+    email: your-email@example.com
+    privateKeySecretRef:
+      name: letsencrypt-prod
+    solvers:
+    - http01:
+        ingress:
+          class: traefik
+EOF
+```
+
+Verify your issuer is ready:
+
+```bash
+kubectl get clusterissuer
+```
+
+The issuer should show `True` under the READY column.
+
+### Understanding cert-manager
+
+cert-manager automates the entire certificate lifecycle using the HTTP-01 challenge:
+
+1. **Certificate Request**: When you create an Ingress with cert-manager annotations, it detects the request
+2. **HTTP Challenge**: cert-manager creates a temporary route to serve a validation file at `http://your-domain/.well-known/acme-challenge/`
+3. **Domain Validation**: Let's Encrypt verifies you control the domain by fetching this file
+4. **Certificate Issuance**: Once validated, Let's Encrypt issues a valid SSL certificate
+5. **Secret Storage**: The certificate is stored as a Kubernetes Secret
+6. **Automatic Renewal**: Certificates are automatically renewed before expiration
+
+## Part 2: Deploy with Ingress
+
+Now that cert-manager is installed and configured, let's expose your application to the internet.
+
+### Step 4: Verify Your Application is Running
+
+First, make sure your application is deployed and accessible within the cluster.
+
+Check your deployments:
+
+```bash
+kubectl get deployments
+```
+
+You should see your frontend deployment running. Check your services:
+
+```bash
+kubectl get services
+```
+
+You should see a `furnet-frontend` service of type `ClusterIP` on port `8080`.
+
+### Step 5: Understand the Ingress Resource
+
+An Ingress is a Kubernetes resource that manages external access to services in your cluster. Let's break down what we need:
+
+**Key Components:**
+- **Metadata**: Name, labels, and annotations for configuration
+- **IngressClassName**: Tells Kubernetes which ingress controller to use (Traefik)
+- **TLS Configuration**: Defines which domains need HTTPS and where to store certificates
+- **Rules**: Maps domains and paths to backend services
+
+### Step 6: Create the Ingress Manifest
+
+Create a new file for your Ingress configuration:
+
+```bash
+nano ingress.yaml
+```
+
+**Why a separate file?** Keeping your Ingress in its own file makes it easy to modify routing without touching your application deployment.
+
+### Step 7: Add Metadata and Annotations
+
+Start by defining the basic structure and metadata:
+
+```yaml
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: furnet-ingress
+  labels:
+    app: furnet
+  annotations:
+    # Traefik annotations for k3s
+    traefik.ingress.kubernetes.io/router.entrypoints: websecure
+
+    # cert-manager annotations for automatic TLS certificate provisioning
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+```
+
+**Understanding the annotations:**
+
+- `traefik.ingress.kubernetes.io/router.entrypoints: websecure`
+  - Tells Traefik to use the HTTPS entrypoint (port 443)
+  - Without this, traffic might only work on HTTP
+
+- `cert-manager.io/cluster-issuer: "letsencrypt-prod"`
+  - Tells cert-manager to automatically create a certificate
+  - Uses the `letsencrypt-prod` ClusterIssuer we created earlier
+  - cert-manager watches for Ingresses with this annotation and handles certificate issuance
+
+### Step 8: Specify the Ingress Class
+
+Add the ingress class specification:
+
+```yaml
+spec:
+  # Note: k3s uses traefik as the default ingress class
+  # You can omit ingressClassName or explicitly set it to "traefik"
+  ingressClassName: traefik
+```
+
+**What is ingressClassName?**
+
+- Kubernetes supports multiple ingress controllers in one cluster
+- This field tells Kubernetes which controller should handle this Ingress
+- k3s comes with Traefik pre-installed, so we use `traefik`
+
+**Fun fact:** You could run NGINX and Traefik side-by-side and route different applications through different controllers!
+
+### Step 9: Configure TLS/SSL
+
+Add the TLS configuration:
+
+```yaml
+  tls:
+  - hosts:
+    - dj-viscon-workshop-0.vsos.ethz.ch  # CHANGE THIS to your participant number
+    secretName: furnet-tls-cert
+```
+
+**Understanding TLS configuration:**
+
+- `hosts`: List of domains that need SSL certificates
+  - Replace `0` with your participant number (1, 2, 3, etc.)
+  - This must match your actual domain
+
+- `secretName: furnet-tls-cert`
+  - Where cert-manager will store your certificate
+  - This is a Kubernetes Secret that will be automatically created
+  - Traefik reads this secret to serve HTTPS traffic
+
+**What happens here?**
+
+When you create this Ingress:
+1. cert-manager sees the annotation and TLS config
+2. It creates a Certificate resource automatically
+3. Let's Encrypt validates you own the domain (HTTP-01 challenge)
+4. The certificate is stored in the `furnet-tls-cert` secret
+5. Traefik uses this certificate for HTTPS connections
+
+### Step 10: Define Routing Rules
+
+Add the routing rules to direct traffic to your application:
+
+```yaml
+  rules:
+  - host: dj-viscon-workshop-0.vsos.ethz.ch  # CHANGE THIS to your participant number
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: furnet-frontend
+            port:
+              number: 8080
+```
+
+**Breaking down the routing:**
+
+- `host: dj-viscon-workshop-0.vsos.ethz.ch`
+  - Only requests to this domain will be routed by this rule
+  - Replace with your actual workshop domain
+
+- `http.paths`: List of path-based routing rules
+  - You can have multiple paths routing to different services
+
+- `path: /`
+  - Match all paths starting with `/` (everything)
+
+- `pathType: Prefix`
+  - Match based on URL path prefix
+  - Other options: `Exact` (exact match), `ImplementationSpecific`
+
+- `backend.service.name: furnet-frontend`
+  - The name of your Kubernetes Service
+  - This must match the service you created for your application
+
+- `backend.service.port.number: 8080`
+  - The port your service is listening on
+  - This should match your Service's port
+
+**Path routing examples:**
+
+You could add multiple paths for different services:
+```yaml
+- path: /
+  pathType: Prefix
+  backend:
+    service:
+      name: furnet-frontend
+      port:
+        number: 8080
+- path: /api
+  pathType: Prefix
+  backend:
+    service:
+      name: furnet-backend
+      port:
+        number: 8000
+```
+
+### Step 11: Complete Ingress Manifest
+
+Here's your complete Ingress configuration:
+
+```yaml
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: furnet-ingress
+  labels:
+    app: furnet
+  annotations:
+    # Traefik annotations for k3s
+    traefik.ingress.kubernetes.io/router.entrypoints: websecure
+
+    # cert-manager annotations for automatic TLS certificate provisioning
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+
+spec:
+  # Note: k3s uses traefik as the default ingress class
+  # You can omit ingressClassName or explicitly set it to "traefik"
+  ingressClassName: traefik
+
+  tls:
+  - hosts:
+    - dj-viscon-workshop-0.vsos.ethz.ch  # CHANGE THIS to your actual domain
+    secretName: furnet-tls-cert
+
+  rules:
+  - host: dj-viscon-workshop-0.vsos.ethz.ch  # CHANGE THIS to your actual domain
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: furnet-frontend
+            port:
+              number: 8080
+```
+
+**Important:** Replace `dj-viscon-workshop-0.vsos.ethz.ch` with your assigned domain in **both** places (tls.hosts and rules.host).
+
+### Step 12: Apply the Ingress
+
+Save the file and apply it to your cluster:
+
+```bash
+kubectl apply -f ingress.yaml
+```
+
+You should see:
+```
+ingress.networking.k8s.io/furnet-ingress created
+```
+
+### Step 13: Verify the Ingress
+
+Check that your Ingress was created:
+
+```bash
+kubectl get ingress
+```
+
+You should see something like:
+```
+NAME              CLASS     HOSTS                                    ADDRESS         PORTS     AGE
+furnet-ingress    traefik   dj-viscon-workshop-0.vsos.ethz.ch       10.43.123.45    80, 443   10s
+```
+
+Get detailed information:
+
+```bash
+kubectl describe ingress furnet-ingress
+```
+
+Look for:
+- The TLS configuration
+- The routing rules
+- Events showing cert-manager activity
+
+### Step 14: Watch Certificate Issuance
+
+cert-manager detected your Ingress and started requesting a certificate. Watch the process:
+
+```bash
+kubectl get certificate
+```
+
+You should see a certificate named based on your Ingress:
+
+```
+NAME               READY   SECRET             AGE
+furnet-tls-cert    False   furnet-tls-cert    20s
+```
+
+Check the certificate details:
+
+```bash
+kubectl describe certificate furnet-tls-cert
+```
+
+**What to look for:**
+
+- Events showing "Created new CertificateRequest"
+- "Waiting for CertificateRequest to complete"
+- Eventually: "Certificate issued successfully"
+
+**This takes 1-3 minutes.** Let's Encrypt needs to:
+1. Create an HTTP challenge
+2. Verify your domain ownership
+3. Issue the certificate
+4. Store it in the secret
+
+### Step 15: Verify the Certificate Secret
+
+Once the certificate shows `READY True`, check the secret:
+
+```bash
+kubectl get secret furnet-tls-cert
+```
+
+View the certificate details:
+
+```bash
+kubectl describe secret furnet-tls-cert
+```
+
+You should see `tls.crt` and `tls.key` entries. These are your SSL certificate and private key!
+
+### Step 16: Test Your Application
+
+Open your browser and navigate to your domain:
+
+```
+https://dj-viscon-workshop-0.vsos.ethz.ch
+```
+
+**Expected results:**
+
+- Your application loads over HTTPS
+- The browser shows a lock icon (secure connection)
+- No certificate warnings
+- The certificate is issued by "Let's Encrypt"
+
+**Test the certificate:**
+
+Click the lock icon in your browser and view the certificate details. You should see:
+- Issued to: your domain
+- Issued by: Let's Encrypt
+- Valid for: 90 days
+
+### Understanding HTTP to HTTPS Redirect
+
+By default, Traefik in k3s handles HTTP to HTTPS redirects automatically when TLS is configured. Try visiting:
+
+```
+http://dj-viscon-workshop-0.vsos.ethz.ch
+```
+
+You should be automatically redirected to HTTPS.
+
+## Troubleshooting
+
+### Problem: Certificate stays in "False" state
+
+Check the certificate request:
+
+```bash
+kubectl get certificaterequest
+kubectl describe certificaterequest
+```
+
+Common causes:
+- Domain doesn't point to your VM IP
+- Firewall blocking port 80 (needed for HTTP-01 challenge)
+- Invalid email in ClusterIssuer
+
+Check cert-manager logs:
+
+```bash
+kubectl logs -n cert-manager -l app=cert-manager
+```
+
+### Problem: "503 Service Unavailable"
+
+Your Ingress is working, but the backend service isn't reachable.
+
+Check your service:
+
+```bash
+kubectl get service furnet-frontend
+kubectl describe service furnet-frontend
+```
+
+Check your pods:
+
+```bash
+kubectl get pods
+kubectl logs <pod-name>
+```
+
+Ensure:
+- Service selector matches your pod labels
+- Service port matches container port
+- Pods are in `Running` state
+
+### Problem: "404 Not Found"
+
+Traefik is working, but can't find a route.
+
+Check your Ingress:
+
+```bash
+kubectl describe ingress furnet-ingress
+```
+
+Ensure:
+- Host matches your domain exactly
+- Path is correct
+- Backend service name is correct
+
+### Problem: Certificate warnings in browser
+
+Check if cert-manager created the certificate:
+
+```bash
+kubectl get certificate
+kubectl describe certificate furnet-tls-cert
+```
+
+If the certificate exists but shows warnings:
+- Verify the domain in the certificate matches your URL
+- Check if you're using the correct ClusterIssuer (prod, not staging)
+
+### Problem: Can't access application at all
+
+Check Traefik is running:
+
+```bash
+kubectl get pods -n kube-system | grep traefik
+```
+
+Check your VM firewall allows ports 80 and 443:
+
+```bash
+sudo ufw status
+```
+
+## Advanced: Multiple Applications
+
+You can create multiple Ingresses for different applications:
+
+```yaml
+# ingress-app1.yaml
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: app1-ingress
+  annotations:
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+spec:
+  ingressClassName: traefik
+  tls:
+  - hosts:
+    - app1.example.com
+    secretName: app1-tls-cert
+  rules:
+  - host: app1.example.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: app1-service
+            port:
+              number: 80
+```
+
+Each Ingress gets its own certificate automatically managed by cert-manager!
+
+## Congratulations!
+
+You've successfully completed the Cloud-Native DevOps workshop! Your application is now:
+- ✓ Publicly accessible via HTTPS
+- ✓ Protected with a valid SSL certificate from Let's Encrypt
+- ✓ Automatically secured and renewed by cert-manager
+- ✓ Routed efficiently by Traefik
+- ✓ Running on a production-ready Kubernetes cluster
+
+## What You've Accomplished
+
+Through this workshop, you've built a complete DevOps pipeline from scratch:
+
+1. **Infrastructure**: Set up a k3s Kubernetes cluster on a cloud VM
+2. **CI/CD**: Automated Docker image builds with GitHub Actions
+3. **Deployment**: Created Kubernetes Deployments and Services
+4. **Networking**: Exposed your application with Traefik Ingress
+5. **Security**: Automated SSL certificate management with cert-manager
+
+Every time you push code changes to GitHub, your images rebuild automatically. You can then deploy the updated images to your cluster with a simple `kubectl apply`.
+
+## Next Steps
+
+Want to take your DevOps skills further? Here are some ideas:
+
+**Automation:**
+- Set up automatic deployment on every code push using GitHub Actions
+- Implement GitOps with ArgoCD or Flux
+- Add health checks and readiness probes to your deployments
+
+**Monitoring:**
+- Install Prometheus and Grafana for metrics
+- Set up centralized logging with Loki
+- Configure alerting for critical issues
+
+**Scaling:**
+- Add a HorizontalPodAutoscaler for automatic scaling
+- Implement database persistence with StatefulSets
+- Set up a multi-node k3s cluster
+
+**Advanced Networking:**
+- Configure multiple applications with different domains
+- Set up rate limiting and authentication with Traefik middleware
+- Implement service mesh with Linkerd or Istio
+
+## Thank You!
+
+Thank you for participating in the VIScon 2025 Cloud-Native DevOps workshop! You now have real-world skills and a working pipeline you can use for your own projects. Keep experimenting, keep building, and most importantly—keep learning!
+
+Questions or feedback? Reach out on GitHub or at future VIScon events!

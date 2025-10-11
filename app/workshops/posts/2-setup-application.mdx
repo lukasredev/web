@@ -1,31 +1,162 @@
 ---
 title: 'Step 2 - Setup Application Locally - VIScon 2025 Workshop'
 publishedAt: '2025-10-11'
-summary: 'Clone and run the workshop application locally using Docker and Docker Compose.'
+summary: 'Fork, customize, and run the workshop application locally using Docker and Docker Compose.'
 ---
 
 # Setup Application Locally
 
-Before we deploy to the cloud, let's get the application running on your local machine. This guide will walk you through cloning the repository, installing Docker, and running the application with Docker Compose.
+Before we deploy to the cloud, let's get the application running on your local machine. You'll fork the repository to create your own copy, customize your unique animal identity, and run the application with Docker Compose.
 
 ## Prerequisites
 
 - Git installed on your machine
+- A GitHub account (free tier works perfectly)
 - A terminal or command prompt
 - Basic familiarity with command line
 
-## Step 1: Clone the Repository
+## Step 1: Fork the Repository
 
-Open your terminal and clone the workshop application:
+**Why fork instead of clone?**
+
+In this workshop, you'll be making code changes (customizing your animal) and pushing them to GitHub. Forking creates your own copy of the repository that you have full control over.
+
+### Fork on GitHub
+
+1. Go to [github.com/lukasredev/furnet](https://github.com/lukasredev/furnet)
+2. Click the **"Fork"** button in the top-right corner
+3. Select your GitHub account as the destination
+4. Wait for GitHub to create your fork
+
+You now have your own copy at `github.com/YOUR-USERNAME/furnet`!
+
+### Clone Your Fork
+
+Now clone your fork (not the original repository):
 
 ```bash
-git clone https://github.com/lukasredev/furnet
+git clone https://github.com/YOUR-USERNAME/furnet
 cd furnet
 ```
 
-This downloads the application code to your local machine and navigates into the project directory.
+**Important:** Replace `YOUR-USERNAME` with your actual GitHub username.
 
-## Step 2: Install Docker
+This downloads your forked repository to your local machine and navigates into the project directory.
+
+## Step 2: Customize Your Animal Identity
+
+FurNet is a distributed social network where each instance represents a participant with a unique animal identity. Before running the application, let's customize your animal!
+
+### Understanding Animal Configuration
+
+Each FurNet instance has an animal identity defined in `backend/config.py`. This includes:
+- **Required fields**: Name, species, and description
+- **Optional fields**: Habitat, diet, fun fact, emoji, and color
+
+**Workshop Concept:** Everyone in the workshop will deploy their own animal, and your instances can connect to each other, forming a distributed social network of animals!
+
+### Edit the Configuration File
+
+Open `backend/config.py` in your favorite text editor:
+
+```bash
+nano backend/config.py
+# or use your preferred editor:
+# code backend/config.py    # VS Code
+# vim backend/config.py     # Vim
+# open -a TextEdit backend/config.py  # macOS TextEdit
+```
+
+### Customize Your Animal
+
+Find the `AnimalConfig` class (around line 27) and customize the values:
+
+```python
+class AnimalConfig:
+    """
+    Animal identity configuration for this FurNet instance.
+
+    WORKSHOP PARTICIPANTS: Edit these values to personalize your animal!
+    These are hardcoded and not loaded from environment variables.
+    """
+    # Animal Identity - Fixed Fields (Required)
+    animal_name: str = "Rusty"              # ← Change this to your animal's name
+    animal_species: str = "Red Panda"       # ← Change this to your animal species
+    animal_description: str = "A curious and playful red panda who loves to explore"  # ← Your description
+
+    # Animal Identity - Optional Fields (customize these too!)
+    animal_habitat: Optional[str] = "Bamboo forests of the Himalayas"
+    animal_diet: Optional[str] = "Bamboo, fruits, and occasional insects"
+    animal_fun_fact: Optional[str] = "Red pandas use their bushy tails as blankets in cold weather"
+    animal_emoji: Optional[str] = "🐼"
+    animal_color: Optional[str] = "rust-red"
+```
+
+### Choose Your Animal
+
+Pick any animal you like! Here are some ideas to get you started:
+
+**Land Animals:**
+- Arctic Fox: "A clever arctic fox with brilliant white winter fur"
+- Elephant: "A gentle giant with remarkable memory and intelligence"
+- Meerkat: "A social meerkat always on the lookout for adventure"
+- Sloth: "A relaxed sloth taking life at a comfortable pace"
+
+**Ocean Animals:**
+- Sea Otter: "A playful sea otter who floats on their back"
+- Dolphin: "An intelligent dolphin who loves solving problems"
+- Octopus: "A mysterious octopus with eight arms of creativity"
+
+**Sky Animals:**
+- Owl: "A wise owl active during the quiet night hours"
+- Hummingbird: "A tiny hummingbird with incredible speed and agility"
+- Eagle: "A majestic eagle soaring high above the mountains"
+
+**Mythical/Fun:**
+- Dragon: "A friendly dragon who collects interesting code snippets"
+- Penguin: "A tuxedo-wearing penguin who loves cold climates and Linux"
+
+**Example Customization:**
+
+```python
+class AnimalConfig:
+    # Animal Identity - Fixed Fields (Required)
+    animal_name: str = "Luna"
+    animal_species: str = "Arctic Fox"
+    animal_description: str = "A clever arctic fox with brilliant white winter fur and keen problem-solving skills"
+
+    # Animal Identity - Optional Fields
+    animal_habitat: Optional[str] = "Arctic tundra and snowy mountains"
+    animal_diet: Optional[str] = "Small rodents, birds, and berries"
+    animal_fun_fact: Optional[str] = "Arctic foxes can survive temperatures as low as -70°C"
+    animal_emoji: Optional[str] = "🦊"
+    animal_color: Optional[str] = "snow-white"
+```
+
+### Save Your Changes
+
+After customizing your animal:
+
+1. Save the file (`Ctrl+O` then `Enter` in nano, or `Cmd+S` in most editors)
+2. Exit the editor (`Ctrl+X` in nano)
+
+### Commit Your Changes
+
+Now commit your customized animal to your fork:
+
+```bash
+git add backend/config.py
+git commit -m "feat: customize animal identity to [YOUR-ANIMAL-SPECIES]"
+git push origin main
+```
+
+**Why commit now?**
+
+When you set up GitHub Actions in the next section, it will automatically build your customized animal into Docker images. This way, your deployed instance will have your unique animal identity!
+
+---
+
+## Step 3: Install Docker
 
 Docker packages your application with all its dependencies, making it easy to run consistently across different environments.
 
@@ -91,7 +222,7 @@ docker --version
 
 You should see output like: `Docker version 24.0.0, build abc1234`
 
-## Step 3: Install Docker Compose
+## Step 4: Install Docker Compose
 
 Docker Compose allows you to define and run multi-container applications.
 
@@ -119,7 +250,7 @@ If you need to install it separately:
 sudo apt-get install docker-compose-plugin
 ```
 
-## Step 4: Run the Application
+## Step 5: Run the Application
 
 Now that everything is installed, start the application:
 
@@ -147,7 +278,7 @@ backend-1  | Server running on http://0.0.0.0:8000
 frontend-1 | Server running on http://0.0.0.0:8080
 ```
 
-## Step 5: Access the Application
+## Step 6: Access the Application
 
 Once the containers are running, open your browser and navigate to:
 
@@ -155,6 +286,44 @@ Once the containers are running, open your browser and navigate to:
 - **Backend API**: [http://localhost:8000](http://localhost:8000)
 
 You should see the application's interface in your browser.
+
+### Verify Your Animal Identity
+
+Check that your customized animal appears correctly:
+
+1. **Visit the frontend** at [http://localhost:8080](http://localhost:8080)
+   - You should see your animal's name, species, and description
+
+2. **Check the API directly** at [http://localhost:8000/api/me](http://localhost:8000/api/me)
+   - This endpoint returns your animal's full profile as JSON
+   - Verify all your customized fields appear correctly
+
+**Example API response:**
+
+```json
+{
+  "id": "localhost:luna",
+  "name": "Luna",
+  "species": "Arctic Fox",
+  "description": "A clever arctic fox with brilliant white winter fur and keen problem-solving skills",
+  "instance_url": "http://localhost:8000",
+  "habitat": "Arctic tundra and snowy mountains",
+  "diet": "Small rodents, birds, and berries",
+  "fun_fact": "Arctic foxes can survive temperatures as low as -70°C",
+  "emoji": "🦊",
+  "color": "snow-white"
+}
+```
+
+**Troubleshooting:** If you still see "Rusty the Red Panda", you may need to rebuild:
+
+```bash
+# Stop the containers
+docker compose down
+
+# Rebuild and restart
+docker compose up --build
+```
 
 ## Common Commands
 
@@ -215,12 +384,16 @@ Make sure Docker Desktop is running (macOS/Windows) or start the Docker service 
 sudo systemctl start docker
 ```
 
+## What You've Accomplished
+
+Congratulations! You've:
+- ✓ Forked the FurNet repository to your GitHub account
+- ✓ Customized your unique animal identity
+- ✓ Committed your changes to your fork
+- ✓ Installed Docker and Docker Compose
+- ✓ Run the application locally
+- ✓ Verified your animal appears correctly
+
 ## Next Steps
 
-Now that you have the application running locally, you're ready to:
-1. Set up SSH keys for cloud access
-2. Install k3s on your workshop VM
-3. Create a CI/CD pipeline with GitHub Actions
-4. Deploy to production with Kubernetes
-
-The local setup helps you understand the application before automating its deployment to the cloud.
+Now that your application runs locally with your customized animal, continue to [Step 3: Automate Builds with GitHub Actions](/workshops/3-setup-github-action) to set up continuous integration that automatically builds Docker images every time you push code.

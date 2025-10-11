@@ -8,19 +8,30 @@ summary: 'Set up continuous integration to automatically build and publish Docke
 
 Every time you push code, GitHub Actions will automatically build your Docker images and publish them to GitHub Container Registry (GHCR). No manual building, no manual pushing—just commit your code and let automation handle the rest.
 
+In this guide, we'll build a GitHub Actions workflow step-by-step that builds both the backend and frontend images for the FurNet application.
+
 ## What You'll Learn
 
 - How GitHub Actions workflows work and why they're powerful
 - Authentication with GitHub Container Registry
-- Building Docker images in the cloud
-- Automatic image tagging strategies
+- Building multiple Docker images in one workflow
+- Automatic image tagging strategies (including semantic versioning)
 - Caching for fast builds
 
 ## Prerequisites
 
-- A GitHub repository with your workshop application
-- A Dockerfile in your project (we'll use a simple web app as an example)
-- SSH keys configured and k3s installed on your VM
+- FurNet repository forked and cloned to your machine
+- Basic understanding of Docker and containers
+- GitHub account (free tier works perfectly)
+
+## Understanding the FurNet Application Structure
+
+Before we build the workflow, understand that FurNet has two parts that need separate Docker images:
+
+- **Backend** (`./backend/`): FastAPI Python application
+- **Frontend** (`./frontend/`): React application built with Vite
+
+Each has its own Dockerfile and will be built into separate container images.
 
 ---
 
@@ -38,39 +49,46 @@ GitHub Actions is a CI/CD platform that lets you automate workflows directly in 
 - **Action**: A reusable unit of code (like "checkout repository" or "build Docker image")
 - **Runner**: A server that runs your workflows (GitHub provides these for free!)
 
+**Why This Matters:**
+
+Instead of manually running `docker build` and `docker push` every time you change code, GitHub Actions does it automatically. Push to GitHub, and within minutes, your updated images are ready to deploy.
+
 ---
 
 ## Step 2: Create the Workflow Directory
 
-First, create the directory structure where GitHub looks for workflows:
+Navigate to your FurNet repository and create the directory structure where GitHub looks for workflows:
 
 ```bash
+cd furnet
 mkdir -p .github/workflows
 ```
 
 **Why `.github/workflows`?**
 
-This is a special directory that GitHub recognizes. Any YAML file in this directory will be treated as a workflow definition.
+This is a special directory that GitHub recognizes. Any YAML file in this directory will be treated as a workflow definition and executed automatically.
 
 ---
 
 ## Step 3: Create the Workflow File
 
-Create a new file called `docker-publish.yml` in the `.github/workflows` directory:
+Create a new file for the Docker build workflow:
 
 ```bash
-touch .github/workflows/docker-publish.yml
+nano .github/workflows/docker-publish.yml
 ```
 
 **Naming Convention:**
 
-You can name workflow files anything you want, but descriptive names like `docker-publish.yml`, `ci.yml`, or `deploy.yml` help you (and others) understand what they do.
+You can name workflow files anything you want, but descriptive names like `docker-publish.yml`, `ci.yml`, or `deploy.yml` help you (and others) understand their purpose at a glance.
+
+We'll build this file piece by piece in the following steps.
 
 ---
 
-## Step 4: Define When the Workflow Runs
+## Step 4: Define the Workflow Name and Triggers
 
-Open `docker-publish.yml` and add the following:
+Start by adding the workflow name and defining when it should run:
 
 ```yaml
 name: Build and Push Docker Images
@@ -79,23 +97,27 @@ on:
   push:
     branches:
       - main
-  pull_request:
-    branches:
-      - main
+    tags:
+      - "v*"
 ```
 
-**What does this mean?**
+**Breaking it down:**
 
-- `name`: The display name shown in GitHub's Actions tab
-- `on`: Defines when this workflow triggers
-  - `push` to `main` branch → Build and push images
-  - `pull_request` to `main` → Build only (to test, but don't publish)
+- `name: Build and Push Docker Images`: The display name shown in GitHub's Actions tab
+- `on:`: Defines the events that trigger this workflow
+  - `push.branches: main`: Triggers when you push commits to the main branch
+  - `push.tags: "v*"`: Triggers when you push tags starting with "v" (e.g., v1.0.0, v2.1.3)
+
+**Why both branches and tags?**
+
+- **Branch pushes**: For continuous development—every commit builds new images
+- **Version tags**: For releases—tag your code with v1.0.0 and get properly versioned images
 
 ---
 
 ## Step 5: Set Up Environment Variables
 
-Add environment variables that will be used throughout the workflow:
+Add global environment variables that will be used throughout the workflow:
 
 ```yaml
 env:
@@ -103,21 +125,21 @@ env:
   IMAGE_NAME: ${{ github.repository }}
 ```
 
-**Breaking it down:**
+**What these variables do:**
 
-- `REGISTRY`: GitHub Container Registry URL (`ghcr.io`)
-- `IMAGE_NAME`: Your repository name (e.g., `username/workshop-app`)
-  - `${{ github.repository }}` is a built-in variable that GitHub provides
+- `REGISTRY: ghcr.io`: GitHub Container Registry URL where images will be pushed
+- `IMAGE_NAME: ${{ github.repository }}`: Your repository name in the format `username/furnet`
+  - `${{ github.repository }}` is automatically provided by GitHub
 
 **Why use variables?**
 
-It makes your workflow flexible and reusable. Change the registry once, and it updates everywhere!
+Variables make your workflow portable and maintainable. If you decide to switch registries (e.g., to Docker Hub), you only change one line!
 
 ---
 
-## Step 6: Create the Build Job
+## Step 6: Define the Job and Runner
 
-Now let's create the job to build your application:
+Now let's start defining the actual job that will build your images:
 
 ```yaml
 jobs:
@@ -126,28 +148,46 @@ jobs:
     permissions:
       contents: read
       packages: write
+      id-token: write
+```
 
+**Understanding each part:**
+
+- `jobs:`: Container for all jobs in this workflow
+- `build-and-push:`: Job name (you can have multiple jobs in one workflow)
+- `runs-on: ubuntu-latest`: Run on GitHub's free Ubuntu runner
+- `permissions:`: Security scoping for what this job can access
+  - `contents: read`: Permission to read your repository code
+  - `packages: write`: Permission to publish to GitHub Container Registry
+  - `id-token: write`: Permission for advanced authentication scenarios
+
+**Security Note:** Explicitly defining permissions follows the principle of least privilege—the job only gets access to what it needs.
+
+---
+
+## Step 7: Add the Checkout Step
+
+Begin defining the steps that will execute in sequence:
+
+```yaml
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 ```
 
-**Understanding this code:**
+**What this does:**
 
-- `jobs`: Contains all the jobs in this workflow
-- `build-and-push`: Job name (descriptive and unique)
-- `runs-on: ubuntu-latest`: Run on Ubuntu (GitHub provides this for free)
-- `permissions`: What this job can access
-  - `contents: read`: Read your repository code
-  - `packages: write`: Publish to GitHub Container Registry
-- `steps`: Individual tasks to perform sequentially
-- `actions/checkout@v4`: Official GitHub action that clones your repository
+- `steps:`: List of individual tasks to execute
+- `name: Checkout repository`: Descriptive name for this step
+- `uses: actions/checkout@v4`: Uses GitHub's official action to clone your repository
+
+This step clones your code into the runner's workspace so subsequent steps can access your Dockerfiles and source code.
 
 ---
 
-## Step 7: Set Up Docker Buildx
+## Step 8: Set Up Docker Buildx
 
-Add the Docker Buildx setup step:
+Add Docker Buildx to enable advanced build features:
 
 ```yaml
       - name: Set up Docker Buildx
@@ -156,22 +196,21 @@ Add the Docker Buildx setup step:
 
 **What is Docker Buildx?**
 
-Buildx is Docker's modern build system that supports:
-- Building for multiple architectures (ARM, x86, etc.)
-- Advanced caching
-- Better performance
+Buildx is Docker's modern build system that provides:
+- **Multi-architecture builds**: Build for ARM and x86 simultaneously
+- **Advanced caching**: Significantly faster builds on subsequent runs
+- **BuildKit backend**: Modern, efficient build engine
 
-**Workshop Note:** Without Buildx, you'd be limited to building for your machine's architecture only!
+Even though we're only building for one architecture in this workshop, Buildx provides better caching and performance.
 
 ---
 
-## Step 8: Authenticate with GitHub Container Registry
+## Step 9: Authenticate with GitHub Container Registry
 
-Add authentication:
+Add the login step to authenticate with GHCR:
 
 ```yaml
       - name: Log in to GitHub Container Registry
-        if: github.event_name != 'pull_request'
         uses: docker/login-action@v3
         with:
           registry: ${{ env.REGISTRY }}
@@ -181,78 +220,266 @@ Add authentication:
 
 **Breaking it down:**
 
-- `if: github.event_name != 'pull_request'`: Only login when pushing (not on PRs)
-- `registry`: Where to login (ghcr.io)
-- `username`: Your GitHub username (`github.actor` is automatic)
-- `password`: Authentication token
-  - `GITHUB_TOKEN` is **automatically provided** by GitHub - no setup needed!
+- `registry: ${{ env.REGISTRY }}`: Login to ghcr.io (from our environment variables)
+- `username: ${{ github.actor }}`: Your GitHub username (automatically provided)
+- `password: ${{ secrets.GITHUB_TOKEN }}`: Authentication token
 
-**Security Note:** Never hardcode passwords! GitHub Actions provides `GITHUB_TOKEN` securely.
+**Important:** `GITHUB_TOKEN` is **automatically created** by GitHub for every workflow run. You don't need to configure anything—it just works!
+
+**Security:** The token is scoped to this workflow and expires after the job completes.
 
 ---
 
-## Step 9: Generate Image Metadata and Tags
+## Step 10: Generate Backend Image Metadata
 
-Add metadata extraction:
+Now we'll generate tags and labels for the backend image:
 
 ```yaml
-      - name: Extract metadata
-        id: meta
+      - name: Extract metadata for Backend
+        id: meta-backend
         uses: docker/metadata-action@v5
         with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/backend
           tags: |
             type=ref,event=branch
             type=sha,prefix={{branch}}-
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
             type=raw,value=latest,enable={{is_default_branch}}
 ```
 
-**What are these tags?**
+**Understanding the tags:**
 
-This action automatically creates tags based on your Git activity:
+This step automatically generates multiple tags based on your Git activity:
 
-- `type=ref,event=branch` → Tag with branch name (e.g., `main`)
-- `type=sha,prefix={{branch}}-` → Tag with commit SHA (e.g., `main-abc1234`)
-- `type=raw,value=latest` → Tag as `latest` on main branch
+- `type=ref,event=branch`: Tag with branch name (e.g., `main`)
+- `type=sha,prefix={{branch}}-`: Tag with git commit SHA (e.g., `main-abc1234`)
+- `type=semver,pattern={{version}}`: Full semantic version from git tags (e.g., `1.2.3`)
+- `type=semver,pattern={{major}}.{{minor}}`: Major.minor version (e.g., `1.2`)
+- `type=raw,value=latest`: Tag as `latest` only on the default branch
 
-When you push to `main`, you'll get:
-- `ghcr.io/username/workshop-app:main`
-- `ghcr.io/username/workshop-app:latest`
-- `ghcr.io/username/workshop-app:main-abc1234`
+**Example:** When you push to main with commit `abc1234`, you get:
+- `ghcr.io/username/furnet/backend:main`
+- `ghcr.io/username/furnet/backend:main-abc1234`
+- `ghcr.io/username/furnet/backend:latest`
+
+**Example:** When you tag a release as `v1.0.0`, you get:
+- `ghcr.io/username/furnet/backend:1.0.0`
+- `ghcr.io/username/furnet/backend:1.0`
+- All the branch-based tags too
+
+**Why multiple tags?**
+
+Different deployment scenarios need different tags:
+- `latest`: For development and testing
+- `main-abc1234`: For tracking specific commits
+- `1.0.0`: For production releases
+
+The `id: meta-backend` saves these outputs so we can reference them in the build step.
 
 ---
 
-## Step 10: Build and Push the Docker Image
+## Step 11: Generate Frontend Image Metadata
 
-Add the build step:
+Add a similar metadata step for the frontend:
 
 ```yaml
-      - name: Build and push Docker image
+      - name: Extract metadata for Frontend
+        id: meta-frontend
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/frontend
+          tags: |
+            type=ref,event=branch
+            type=sha,prefix={{branch}}-
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=raw,value=latest,enable={{is_default_branch}}
+```
+
+**Why a separate step?**
+
+Backend and frontend are completely independent images with their own lifecycles. This generates tags like:
+- `ghcr.io/username/furnet/frontend:main`
+- `ghcr.io/username/furnet/frontend:1.0.0`
+- `ghcr.io/username/furnet/frontend:latest`
+
+Notice the only difference from the backend step is `meta-frontend` and `/frontend` in the image path.
+
+---
+
+## Step 12: Build and Push the Backend Image
+
+Now add the actual build step for the backend:
+
+```yaml
+      - name: Build and push Backend Docker image
         uses: docker/build-push-action@v5
         with:
-          context: .
-          file: ./Dockerfile
-          push: ${{ github.event_name != 'pull_request' }}
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
+          context: ./backend
+          file: ./backend/Dockerfile
+          push: true
+          tags: ${{ steps.meta-backend.outputs.tags }}
+          labels: ${{ steps.meta-backend.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 ```
 
-**Understanding the parameters:**
+**Understanding each parameter:**
 
-- `context: .`: Build context (the root directory with your code)
-- `file: ./Dockerfile`: Path to your Dockerfile
-- `push: ${{ github.event_name != 'pull_request' }}`: Only push on real commits, not PRs
-- `tags`: Use the tags from the metadata step
-- `labels`: Add metadata labels to the image
-- `cache-from/cache-to`: Use GitHub Actions cache for faster builds
+- `context: ./backend`: Build context is the backend directory
+  - Docker can access all files in `./backend/` during the build
+- `file: ./backend/Dockerfile`: Path to the Dockerfile for the backend
+- `push: true`: Always push the built image to the registry
+- `tags: ${{ steps.meta-backend.outputs.tags }}`: Use all the tags we generated in step 10
+- `labels: ${{ steps.meta-backend.outputs.labels }}`: Add metadata labels to the image
+- `cache-from: type=gha`: Read cache from GitHub Actions cache
+- `cache-to: type=gha,mode=max`: Write cache to GitHub Actions cache (maximum mode stores all layers)
 
-**Why caching matters:** The cache can speed up builds by 10x or more, especially when only a few files change between commits.
+**Why caching matters:**
+
+The first build might take 3-5 minutes. With caching, subsequent builds complete in 30-60 seconds when only code changes (dependencies are cached).
+
+**What gets built:**
+
+This executes the backend Dockerfile which:
+1. Starts from `python:3.13-slim`
+2. Installs Python dependencies from `requirements.txt`
+3. Copies the FastAPI application code
+4. Sets up health checks
+5. Configures the application to run on port 8000
 
 ---
 
-## Step 11: Commit and Push
+## Step 13: Build and Push the Frontend Image
+
+Add the frontend build step:
+
+```yaml
+      - name: Build and push Frontend Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./frontend
+          file: ./frontend/Dockerfile
+          push: true
+          tags: ${{ steps.meta-frontend.outputs.tags }}
+          labels: ${{ steps.meta-frontend.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+```
+
+**What's different:**
+
+- `context: ./frontend`: Build from the frontend directory
+- `file: ./frontend/Dockerfile`: Use the frontend Dockerfile
+- `tags: ${{ steps.meta-frontend.outputs.tags }}`: Use frontend tags from step 11
+
+**What gets built:**
+
+This executes the frontend Dockerfile which:
+1. Builds the React app using Node.js (builder stage)
+2. Compiles Vite assets into static files
+3. Copies built files to an nginx image (production stage)
+4. Sets up nginx to serve the frontend on port 8080
+
+**Multi-stage builds:**
+
+Notice the frontend uses a multi-stage build (check `frontend/Dockerfile`). This keeps the final image small—it only contains nginx and built assets, not the entire Node.js build toolchain.
+
+---
+
+## Step 14: The Complete Workflow
+
+Here's the complete workflow file with all the pieces together:
+
+```yaml
+name: Build and Push Docker Images
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - "v*"
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata for Backend
+        id: meta-backend
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/backend
+          tags: |
+            type=ref,event=branch
+            type=sha,prefix={{branch}}-
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Extract metadata for Frontend
+        id: meta-frontend
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/frontend
+          tags: |
+            type=ref,event=branch
+            type=sha,prefix={{branch}}-
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Build and push Backend Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./backend
+          file: ./backend/Dockerfile
+          push: true
+          tags: ${{ steps.meta-backend.outputs.tags }}
+          labels: ${{ steps.meta-backend.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build and push Frontend Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./frontend
+          file: ./frontend/Dockerfile
+          push: true
+          tags: ${{ steps.meta-frontend.outputs.tags }}
+          labels: ${{ steps.meta-frontend.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+```
+
+Save this complete workflow to `.github/workflows/docker-publish.yml` in your FurNet repository.
+
+---
+
+## Step 15: Commit and Push
 
 Now save your workflow file and push it to GitHub:
 
@@ -262,57 +489,137 @@ git commit -m "feat: add GitHub Actions workflow for Docker builds"
 git push origin main
 ```
 
----
+**What happens next:**
 
-## Step 12: Watch It Build
-
-1. Go to your GitHub repository
-2. Click the **"Actions"** tab
-3. You should see your workflow running!
-4. Click on it to see real-time logs
-
-**What's happening:**
-
-GitHub detected your workflow file and automatically started running it. You'll see:
-- Checkout step cloning your code
-- Docker Buildx being set up
-- Login to GHCR
-- Building your images layer by layer
-- Pushing images to the registry
+The moment you push, GitHub detects the new workflow file and immediately starts executing it. Your first automated build has begun!
 
 ---
 
-## Step 13: Verify Your Published Images
+## Step 16: Watch Your Workflow Run
 
-After the workflow completes:
+1. Go to your GitHub repository in your browser
+2. Click the **"Actions"** tab at the top
+3. You should see "Build and Push Docker Images" running
+4. Click on the workflow run to see detailed logs
 
-1. Go to your GitHub profile or repository
-2. Click **"Packages"** (on the right sidebar)
-3. You should see your published image
+**What you'll see:**
+
+GitHub shows you real-time progress:
+- ✓ Checkout repository
+- ✓ Set up Docker Buildx
+- ✓ Log in to GitHub Container Registry
+- ✓ Extract metadata for Backend
+- ✓ Extract metadata for Frontend
+- 🔄 Build and push Backend Docker image (this takes the longest)
+- 🔄 Build and push Frontend Docker image
+
+**First build timing:**
+
+Expect the first run to take 5-10 minutes total. Both images are being built from scratch, and all dependencies need to be downloaded.
+
+---
+
+## Step 17: Verify Your Published Images
+
+After the workflow completes successfully (green checkmark):
+
+1. Go to your GitHub profile page or repository
+2. Click **"Packages"** in the right sidebar
+3. You should see two packages:
+   - `furnet/backend`
+   - `furnet/frontend`
+
+Click on each package to see:
+- All available tags (latest, main, main-abc1234, etc.)
+- Image size
+- Layers and security scans
+- Pull commands
 
 **Default visibility:** Private
 
-To make them public (so others can pull without authentication):
+**To make images public** (so anyone can pull them):
 1. Click on the package
 2. Click **"Package settings"** (bottom right)
 3. Scroll down to **"Danger Zone"**
 4. Click **"Change visibility"** → **"Public"**
+5. Confirm by typing the repository name
+
+**Do this for both backend and frontend packages.**
 
 ---
 
-## Step 14: Use Your Published Images
+## Step 18: Pull and Test Your Images
 
-Now you can pull and run your image from anywhere:
+Now you can pull and run your images from anywhere:
 
+**Backend:**
 ```bash
-# Pull your image
-docker pull ghcr.io/username/workshop-app:latest
+# Pull the backend image
+docker pull ghcr.io/your-username/furnet/backend:latest
 
-# Run it
-docker run -p 8080:8080 ghcr.io/username/workshop-app:latest
+# Run the backend
+docker run -p 8000:8000 ghcr.io/your-username/furnet/backend:latest
+
+# Test it
+curl http://localhost:8000/health
 ```
 
-Your k3s cluster can now pull this image directly from GHCR, which we'll configure in the next section when we set up automatic deployments.
+**Frontend:**
+```bash
+# Pull the frontend image
+docker pull ghcr.io/your-username/furnet/frontend:latest
+
+# Run the frontend
+docker run -p 8080:8080 ghcr.io/your-username/furnet/frontend:latest
+
+# Test it
+curl http://localhost:8080/health
+```
+
+**Important:** Replace `your-username` with your actual GitHub username.
+
+---
+
+## Understanding the Complete Pipeline
+
+Now that you've built the workflow, let's understand how everything flows together:
+
+1. **You push code** → GitHub receives the commit
+2. **Workflow triggers** → GitHub Actions starts a new runner
+3. **Code checkout** → Your repository is cloned
+4. **Buildx setup** → Docker build environment is prepared
+5. **Registry login** → Authenticates with GHCR using auto-generated token
+6. **Metadata generation** → Creates appropriate tags based on branch/tag
+7. **Backend build** → Builds from `./backend/Dockerfile`, using cache if available
+8. **Backend push** → Pushes all tagged versions to GHCR
+9. **Frontend build** → Builds from `./frontend/Dockerfile`, using cache
+10. **Frontend push** → Pushes all tagged versions to GHCR
+11. **Workflow complete** → Images are ready to deploy!
+
+**From your perspective:** Push code, wait a few minutes, pull updated images.
+
+---
+
+## Testing the Versioning System
+
+To create a versioned release:
+
+```bash
+# Tag your current commit with a version
+git tag v1.0.0
+
+# Push the tag to GitHub
+git push origin v1.0.0
+```
+
+This triggers the workflow again, and you'll get images tagged with:
+- `1.0.0`
+- `1.0`
+- `latest`
+- `main`
+- `main-abc1234`
+
+Check your packages page to see all the version tags!
 
 ---
 
@@ -320,51 +627,160 @@ Your k3s cluster can now pull this image directly from GHCR, which we'll configu
 
 ### Problem: "Permission denied while trying to push"
 
+**Symptoms:** Workflow fails at the "Build and push" step with permission errors
+
 **Solution:** Check that your workflow has the correct permissions:
 ```yaml
 permissions:
   contents: read
   packages: write
+  id-token: write
 ```
 
-### Problem: "Image not found when pulling"
-
-**Solution:**
-1. Check if the image is private (requires login):
-   ```bash
-   echo $GITHUB_TOKEN | docker login ghcr.io -u username --password-stdin
-   ```
-2. Verify the image name is correct (go to Packages tab)
-
-### Problem: "Workflow doesn't trigger"
-
-**Solution:**
-1. Ensure the workflow file is in `.github/workflows/`
-2. Check YAML syntax (indentation matters!)
-3. Verify you pushed to a branch listed in the `on:` section
-
-### Problem: "Build is slow"
-
-**Solution:** The first build is always slow. Subsequent builds use cache and are much faster!
+Also verify you haven't modified repository settings to restrict package publishing.
 
 ---
 
-## Summary
+### Problem: "Image not found when pulling"
 
-You've now created an automated CI/CD pipeline that builds Docker images on every push and publishes them to GitHub Container Registry. Every commit to your main branch triggers a new build, and the resulting image is immediately available for deployment.
+**Symptoms:** `docker pull ghcr.io/username/furnet/backend:latest` fails with "not found"
+
+**Solution:**
+
+1. **Check if the package is private:**
+   - Private packages require authentication to pull
+   - Make the package public (see Step 17) or login:
+   ```bash
+   echo $GITHUB_TOKEN | docker login ghcr.io -u username --password-stdin
+   ```
+
+2. **Verify the image name is exactly correct:**
+   - Go to GitHub Packages and copy the exact pull command
+   - Ensure username, repository name, and tag are all correct
+
+---
+
+### Problem: "Workflow doesn't trigger"
+
+**Symptoms:** You pushed code but no workflow run appears in the Actions tab
+
+**Solution:**
+
+1. **Check the file is in the correct location:**
+   ```bash
+   ls -la .github/workflows/docker-publish.yml
+   ```
+
+2. **Validate YAML syntax:**
+   - YAML is indentation-sensitive (use spaces, not tabs)
+   - Use a YAML validator online or in your editor
+   - Check for common issues like missing colons or incorrect indentation
+
+3. **Verify trigger conditions:**
+   - Did you push to the `main` branch?
+   - Check your default branch name (might be `master` instead of `main`)
+
+4. **Check Actions are enabled:**
+   - Go to repository Settings → Actions → General
+   - Ensure "Allow all actions and reusable workflows" is selected
+
+---
+
+### Problem: "Build is very slow"
+
+**Symptoms:** Builds take 10+ minutes every time
+
+**Solution:**
+
+The first build is always slow (5-10 minutes). Subsequent builds should be much faster (1-3 minutes) thanks to caching.
+
+**If builds remain slow:**
+
+1. **Check cache is working:**
+   - Look for "Using cache from" messages in build logs
+   - Ensure both `cache-from` and `cache-to` are set
+
+2. **Optimize your Dockerfiles:**
+   - Copy dependency files (`requirements.txt`, `package.json`) before code
+   - This lets Docker cache dependency installation layers
+   - Only code changes trigger rebuilds of later layers
+
+3. **Check for cache invalidation:**
+   - Changing `requirements.txt` or `package.json` invalidates cache
+   - This is expected and necessary
+
+**Example timing breakdown:**
+- First build: 8 minutes (no cache)
+- Second build (only code change): 90 seconds (dependencies cached)
+- Third build (dependency change): 5 minutes (need to reinstall dependencies)
+
+---
+
+### Problem: "One image builds but the other fails"
+
+**Symptoms:** Backend builds successfully but frontend fails (or vice versa)
+
+**Solution:**
+
+1. **Check the Dockerfile:**
+   - Test building locally first:
+   ```bash
+   cd frontend  # or backend
+   docker build -t test .
+   ```
+
+2. **Check the build context:**
+   - Ensure all necessary files exist in the context directory
+   - Verify `.dockerignore` isn't excluding required files
+
+3. **Review build logs:**
+   - Click on the failed step in GitHub Actions
+   - Read the error message carefully
+   - Common issues: missing dependencies, syntax errors, network timeouts
+
+---
 
 ## Next Steps
 
-With your images automatically building and publishing, you're ready to configure k3s to pull and deploy these images. In the next section, we'll set up Kubernetes deployments that automatically update when new images are pushed.
+With automated Docker image builds in place, you're ready to set up your Kubernetes cluster!
 
-## Future Improvements
+**What you've accomplished:**
+- ✓ Created a complete CI/CD pipeline for building container images
+- ✓ Automated building of both backend and frontend
+- ✓ Implemented intelligent tagging (latest, versioned, commit-specific)
+- ✓ Set up layer caching for fast builds
+- ✓ Published images to GitHub Container Registry
 
-Once you're comfortable with the basics, consider these enhancements:
+Continue to [Step 4: Install k3s](/workshops/4-install-k3s) to set up a lightweight Kubernetes cluster on your workshop VM.
 
-- **Version tags**: Add support for semantic versioning (v1.0.0) to create release-specific images
-- **Multi-architecture builds**: Build for both AMD64 and ARM64 to support different server types
-- **Test jobs**: Run automated tests before building to catch bugs early
-- **Build status badge**: Add a badge to your README showing build status
-- **Dependabot**: Automatically update GitHub Actions versions with pull requests
-- **Multi-stage builds**: Optimize Dockerfile for smaller image sizes and faster builds
-- **Separate environments**: Add staging and production workflows with different configurations
+---
+
+## Advanced: Understanding the Workflow YAML
+
+GitHub Actions workflows use YAML, which is sensitive to indentation and structure. Here's how to read the workflow:
+
+**Top level** (no indentation):
+- `name`: Workflow name
+- `on`: Trigger conditions
+- `env`: Global variables
+- `jobs`: Job definitions
+
+**Job level** (indented under `jobs:`):
+- `build-and-push`: Job identifier
+- `runs-on`: Runner type
+- `permissions`: Access scope
+- `steps`: Task list
+
+**Step level** (indented under `steps:`):
+- `name`: Step description
+- `uses`: Pre-built action to use
+- `with`: Parameters for the action
+- `id`: Identifier to reference outputs
+
+**Variables:**
+- `${{ }}`: Expression syntax
+- `env.VARIABLE`: Reference environment variable
+- `secrets.TOKEN`: Reference secret
+- `steps.id.outputs.value`: Reference step output
+
+Understanding this structure helps you customize the workflow for your specific needs.

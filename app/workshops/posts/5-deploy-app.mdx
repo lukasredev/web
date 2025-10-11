@@ -1,0 +1,812 @@
+---
+title: 'Step 5 - Deploy Your App to Kubernetes - VIScon 2025 Workshop'
+publishedAt: '2025-10-11'
+summary: 'Deploy FurNet to your k3s cluster using Deployments and Services.'
+---
+
+# Deploy Your App to Kubernetes
+
+With k3s installed and GitHub Actions building your Docker images, you're ready to deploy FurNet to your Kubernetes cluster. In this guide, you'll create Kubernetes Deployments and Services that run your application and make it accessible within the cluster.
+
+## Understanding Kubernetes Resources
+
+Before we start creating resources, let's understand what we'll be deploying:
+
+**Deployments:**
+- Manage your application pods
+- Ensure the desired number of replicas are always running
+- Handle rolling updates when you push new code
+
+**Services:**
+- Provide stable network endpoints to access pods
+- Enable service discovery via DNS (e.g., `backend:8000`)
+- Load balance traffic across multiple pod replicas
+
+**Our Architecture:**
+```
+Frontend Deployment (nginx on port 8080)
+         ↓
+Frontend Service (provides stable DNS name)
+         ↓ (for /api/* requests)
+Backend Service (provides stable DNS name)
+         ↓
+Backend Deployment (FastAPI on port 8000)
+```
+
+## Prerequisites
+
+Before deploying, ensure you have:
+- k3s installed and running (completed in Step 4)
+- kubectl configured to access your cluster
+- Docker images built and pushed to GitHub Container Registry (Step 3)
+- Your VM connected via SSH
+
+Verify your cluster is ready:
+
+```bash
+kubectl get nodes
+```
+
+You should see your node in `Ready` status.
+
+## Part 1: Deploy the Backend
+
+The backend is a FastAPI application that serves your animal's profile and API endpoints. Let's create the Deployment and Service that will run it.
+
+### Step 1: Understand the Deployment Structure
+
+A Deployment describes how your application should run. Let's build one piece by piece.
+
+**Basic metadata:**
+
+Every Kubernetes resource starts with metadata identifying what it is:
+
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: furnet-backend
+  labels:
+    app: furnet
+    component: backend
+```
+
+**What this means:**
+- `apiVersion: apps/v1`: Use the apps API (for Deployments)
+- `kind: Deployment`: This is a Deployment resource
+- `name: furnet-backend`: The name we'll use to reference this deployment
+- `labels`: Key-value pairs for organizing resources
+
+### Step 2: Define Replica Count
+
+The spec section defines the desired state. Start with the replica count:
+
+```yaml
+spec:
+  replicas: 1
+```
+
+**What this means:**
+- Kubernetes will always try to maintain 1 running pod
+- If the pod crashes, Kubernetes automatically restarts it
+- You can scale to more replicas later for high availability
+
+### Step 3: Add Label Selectors
+
+Tell the Deployment which pods it manages:
+
+```yaml
+  selector:
+    matchLabels:
+      app: furnet
+      component: backend
+```
+
+**What this means:**
+- The Deployment finds pods with matching labels
+- These labels must match the pod template labels below
+- This is how Kubernetes knows which pods belong to this deployment
+
+### Step 4: Create the Pod Template
+
+Now define what each pod should look like:
+
+```yaml
+  template:
+    metadata:
+      labels:
+        app: furnet
+        component: backend
+```
+
+**What this means:**
+- `template`: Describes the pods this Deployment creates
+- `labels`: Must match the selector above
+- Every pod created will have these labels
+
+### Step 5: Configure the Container
+
+Define the container that runs in each pod:
+
+```yaml
+    spec:
+      containers:
+      - name: backend
+        image: ghcr.io/YOUR-USERNAME/furnet/backend:latest
+        ports:
+        - containerPort: 8000
+          name: http
+```
+
+**Important:** Replace `YOUR-USERNAME` with your GitHub username!
+
+**What this means:**
+- `containers`: List of containers in this pod (we only have one)
+- `name: backend`: Container name (for identification)
+- `image`: The Docker image to run (from GitHub Container Registry)
+- `ports`: Which ports the container exposes
+- `containerPort: 8000`: FastAPI listens on port 8000
+
+### Step 6: Add Environment Variables
+
+Configure the application with environment variables:
+
+```yaml
+        env:
+        - name: API_HOST
+          value: "0.0.0.0"
+        - name: API_PORT
+          value: "8000"
+        - name: DEBUG
+          value: "False"
+        - name: CORS_ORIGINS
+          value: "https://dj-viscon-workshop-0.vsos.ethz.ch"
+        - name: INSTANCE_URL
+          value: "https://dj-viscon-workshop-0.vsos.ethz.ch"
+```
+
+**Important:** Replace `0` with your participant number in both URLs!
+
+**What these variables do:**
+- `API_HOST`: Interface to bind to (0.0.0.0 = all interfaces)
+- `API_PORT`: Port to listen on
+- `DEBUG`: Disable debug mode for production
+- `CORS_ORIGINS`: Which domains can make API requests
+- `INSTANCE_URL`: Your unique FurNet instance URL
+
+### Step 7: Add Health Checks
+
+Health checks ensure Kubernetes knows when your app is healthy:
+
+```yaml
+        livenessProbe:
+          httpGet:
+            path: /health/live
+            port: 8000
+          initialDelaySeconds: 10
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /health/ready
+            port: 8000
+          initialDelaySeconds: 5
+          periodSeconds: 5
+```
+
+**What these probes do:**
+
+**Liveness Probe:**
+- Checks if the application is alive
+- If it fails, Kubernetes restarts the pod
+- `initialDelaySeconds: 10`: Wait 10 seconds before first check
+- `periodSeconds: 10`: Check every 10 seconds
+
+**Readiness Probe:**
+- Checks if the application is ready to receive traffic
+- If it fails, Kubernetes stops sending requests to this pod
+- Faster checks (every 5 seconds) to quickly detect when pods are ready
+
+### Step 8: Set Resource Limits
+
+Define resource requests and limits:
+
+```yaml
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+```
+
+**What this means:**
+
+**Requests:**
+- `memory: "128Mi"`: Guaranteed 128 megabytes of RAM
+- `cpu: "100m"`: Guaranteed 0.1 CPU cores (100 millicores)
+- Kubernetes uses this to decide where to schedule the pod
+
+**Limits:**
+- `memory: "512Mi"`: Maximum 512 megabytes of RAM
+- `cpu: "500m"`: Maximum 0.5 CPU cores
+- Pod is throttled (CPU) or killed (memory) if it exceeds limits
+
+### Step 9: Create the Backend Deployment File
+
+Now let's create the complete deployment file:
+
+```bash
+nano backend-deployment.yaml
+```
+
+Copy the complete deployment (we'll show the full YAML at the end of this section).
+
+### Step 10: Create the Backend Service
+
+A Service provides a stable network endpoint for accessing your backend pods.
+
+Start with basic metadata:
+
+```yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: backend
+  labels:
+    app: furnet
+    component: backend
+```
+
+**What this means:**
+- `kind: Service`: This is a Service resource
+- `name: backend`: DNS name will be `backend` (other pods use `http://backend:8000`)
+
+Add the service specification:
+
+```yaml
+spec:
+  type: ClusterIP
+  selector:
+    app: furnet
+    component: backend
+  ports:
+  - port: 8000
+    targetPort: 8000
+    protocol: TCP
+    name: http
+```
+
+**Understanding each part:**
+
+- `type: ClusterIP`: Internal service (only accessible within cluster)
+- `selector`: Routes traffic to pods with these labels
+- `port: 8000`: Service listens on port 8000
+- `targetPort: 8000`: Forward to container port 8000
+- `name: http`: Name this port mapping
+
+### Step 11: Apply the Backend Resources
+
+Create the service file:
+
+```bash
+nano backend-service.yaml
+```
+
+Now apply both resources:
+
+```bash
+kubectl apply -f backend-deployment.yaml
+kubectl apply -f backend-service.yaml
+```
+
+### Step 12: Verify Backend Deployment
+
+Watch the backend pod start:
+
+```bash
+kubectl get pods -w
+```
+
+You should see:
+```
+NAME                              READY   STATUS              RESTARTS   AGE
+furnet-backend-xxxxx-xxxxx        0/1     ContainerCreating   0          5s
+furnet-backend-xxxxx-xxxxx        1/1     Running             0          15s
+```
+
+Press `Ctrl+C` when the pod shows `1/1` and `Running`.
+
+Check the deployment:
+
+```bash
+kubectl get deployment furnet-backend
+```
+
+Expected output:
+```
+NAME             READY   UP-TO-DATE   AVAILABLE   AGE
+furnet-backend   1/1     1            1           30s
+```
+
+Check the service:
+
+```bash
+kubectl get service backend
+```
+
+Expected output:
+```
+NAME      TYPE        CLUSTER-IP      EXTERNAL-IP   PORT(S)    AGE
+backend   ClusterIP   10.43.xxx.xxx   <none>        8000/TCP   30s
+```
+
+### Step 13: Test the Backend
+
+Check the pod logs:
+
+```bash
+kubectl logs -l component=backend
+```
+
+You should see Uvicorn starting and your application initializing.
+
+Test the backend from within the cluster:
+
+```bash
+kubectl run test-pod --image=curlimages/curl --rm -it -- curl http://backend:8000/health/live
+```
+
+You should see: `{"status":"alive"}`
+
+## Part 2: Deploy the Frontend
+
+The frontend is an nginx container serving your React app and proxying API requests to the backend.
+
+### Step 14: Understand Frontend Configuration
+
+The frontend deployment is similar to the backend but with key differences:
+
+**Different image:**
+- Uses your `furnet/frontend:latest` image
+- Contains nginx + your built React application
+
+**Different port:**
+- Listens on port 8080 (not 8000)
+
+**Proxy configuration:**
+- nginx is configured to proxy `/api/*` requests to `http://backend:8000`
+- This is why the backend Service DNS name matters!
+
+### Step 15: Create the Frontend Deployment
+
+The structure mirrors the backend deployment. Key sections:
+
+**Container configuration:**
+
+```yaml
+      containers:
+      - name: frontend
+        image: ghcr.io/YOUR-USERNAME/furnet/frontend:latest
+        ports:
+        - containerPort: 8080
+          name: http
+```
+
+**Health checks:**
+
+```yaml
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 10
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 5
+          periodSeconds: 5
+```
+
+**Resource limits:**
+
+```yaml
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "50m"
+          limits:
+            memory: "256Mi"
+            cpu: "200m"
+```
+
+Note: Frontend needs fewer resources than backend (just serving static files).
+
+### Step 16: Create the Frontend Service
+
+The frontend service is similar to the backend:
+
+```yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: furnet-frontend
+  labels:
+    app: furnet
+    component: frontend
+spec:
+  type: ClusterIP
+  selector:
+    app: furnet
+    component: frontend
+  ports:
+  - port: 8080
+    targetPort: 8080
+    protocol: TCP
+    name: http
+```
+
+**Key difference:**
+- Service name is `furnet-frontend` (full name to avoid conflicts)
+- Port 8080 instead of 8000
+
+### Step 17: Apply the Frontend Resources
+
+Create the files:
+
+```bash
+nano frontend-deployment.yaml
+nano frontend-service.yaml
+```
+
+Apply them:
+
+```bash
+kubectl apply -f frontend-deployment.yaml
+kubectl apply -f frontend-service.yaml
+```
+
+### Step 18: Verify Frontend Deployment
+
+Watch all pods:
+
+```bash
+kubectl get pods
+```
+
+You should see both backend and frontend running:
+```
+NAME                                READY   STATUS    RESTARTS   AGE
+furnet-backend-xxxxx-xxxxx          1/1     Running   0          5m
+furnet-frontend-xxxxx-xxxxx         1/1     Running   0          30s
+```
+
+Check both services:
+
+```bash
+kubectl get services
+```
+
+Expected output:
+```
+NAME              TYPE        CLUSTER-IP      EXTERNAL-IP   PORT(S)    AGE
+backend           ClusterIP   10.43.xxx.xxx   <none>        8000/TCP   5m
+furnet-frontend   ClusterIP   10.43.xxx.xxx   <none>        8080/TCP   30s
+```
+
+### Step 19: Test Frontend to Backend Communication
+
+Test that the frontend can reach the backend:
+
+```bash
+kubectl run test-pod --image=curlimages/curl --rm -it -- curl http://furnet-frontend:8080/health
+```
+
+The frontend health endpoint should respond.
+
+## Part 3: Complete Resource Manifests
+
+Here are the complete YAML manifests for your deployment:
+
+### backend-deployment.yaml
+
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: furnet-backend
+  labels:
+    app: furnet
+    component: backend
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: furnet
+      component: backend
+  template:
+    metadata:
+      labels:
+        app: furnet
+        component: backend
+    spec:
+      containers:
+      - name: backend
+        image: ghcr.io/YOUR-USERNAME/furnet/backend:latest
+        ports:
+        - containerPort: 8000
+          name: http
+        env:
+        - name: API_HOST
+          value: "0.0.0.0"
+        - name: API_PORT
+          value: "8000"
+        - name: DEBUG
+          value: "False"
+        - name: CORS_ORIGINS
+          value: "https://dj-viscon-workshop-0.vsos.ethz.ch"
+        - name: INSTANCE_URL
+          value: "https://dj-viscon-workshop-0.vsos.ethz.ch"
+        livenessProbe:
+          httpGet:
+            path: /health/live
+            port: 8000
+          initialDelaySeconds: 10
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /health/ready
+            port: 8000
+          initialDelaySeconds: 5
+          periodSeconds: 5
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+```
+
+**Remember to replace:**
+- `YOUR-USERNAME` with your GitHub username
+- `0` with your participant number in the URLs
+
+### backend-service.yaml
+
+```yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: backend
+  labels:
+    app: furnet
+    component: backend
+spec:
+  type: ClusterIP
+  selector:
+    app: furnet
+    component: backend
+  ports:
+  - port: 8000
+    targetPort: 8000
+    protocol: TCP
+    name: http
+```
+
+### frontend-deployment.yaml
+
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: furnet-frontend
+  labels:
+    app: furnet
+    component: frontend
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: furnet
+      component: frontend
+  template:
+    metadata:
+      labels:
+        app: furnet
+        component: frontend
+    spec:
+      containers:
+      - name: frontend
+        image: ghcr.io/YOUR-USERNAME/furnet/frontend:latest
+        ports:
+        - containerPort: 8080
+          name: http
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 10
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 5
+          periodSeconds: 5
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "50m"
+          limits:
+            memory: "256Mi"
+            cpu: "200m"
+```
+
+**Remember to replace:**
+- `YOUR-USERNAME` with your GitHub username
+
+### frontend-service.yaml
+
+```yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: furnet-frontend
+  labels:
+    app: furnet
+    component: frontend
+spec:
+  type: ClusterIP
+  selector:
+    app: furnet
+    component: frontend
+  ports:
+  - port: 8080
+    targetPort: 8080
+    protocol: TCP
+    name: http
+```
+
+## Troubleshooting
+
+### Problem: ImagePullBackOff
+
+Your pod shows `ImagePullBackOff` status.
+
+**Check the error:**
+
+```bash
+kubectl describe pod <pod-name>
+```
+
+**Common causes:**
+
+1. **Image doesn't exist:**
+   - Verify GitHub Actions completed successfully
+   - Check your packages exist at github.com/YOUR-USERNAME?tab=packages
+
+2. **Image is private:**
+   - Make your packages public in GitHub (see Step 3 guide)
+   - Or create an image pull secret for private images
+
+3. **Wrong image name:**
+   - Double-check your username is correct
+   - Ensure you're using `/backend` and `/frontend` in the paths
+
+### Problem: CrashLoopBackOff
+
+Your pod keeps restarting.
+
+**Check the logs:**
+
+```bash
+kubectl logs <pod-name>
+```
+
+**Common causes:**
+
+1. **Application error:**
+   - Look for Python tracebacks or JavaScript errors in logs
+   - Missing environment variables
+   - Configuration issues
+
+2. **Health check failures:**
+   - Liveness probe might be too aggressive
+   - Increase `initialDelaySeconds` if app needs more time to start
+
+### Problem: Pod is Running but not Ready
+
+Pod shows `0/1` in the READY column.
+
+**Check readiness probe:**
+
+```bash
+kubectl describe pod <pod-name>
+```
+
+Look for failed readiness probe events.
+
+**Common causes:**
+- Application hasn't finished starting
+- Health endpoint is failing
+- Port mismatch in probe configuration
+
+### Problem: Service Not Resolving
+
+Can't reach the service from within the cluster.
+
+**Check service endpoints:**
+
+```bash
+kubectl get endpoints
+```
+
+If endpoints are empty, the service selector doesn't match any pods.
+
+**Verify labels match:**
+
+```bash
+# Check pod labels
+kubectl get pods --show-labels
+
+# Compare with service selector
+kubectl get service <service-name> -o yaml
+```
+
+### Problem: Frontend Can't Reach Backend
+
+Frontend works but API calls fail.
+
+**Check backend service DNS:**
+
+```bash
+kubectl run test-pod --image=curlimages/curl --rm -it -- nslookup backend
+```
+
+Should resolve to the backend service ClusterIP.
+
+**Check backend service is responding:**
+
+```bash
+kubectl run test-pod --image=curlimages/curl --rm -it -- curl http://backend:8000/health/live
+```
+
+Should return `{"status":"alive"}`.
+
+## Scaling Your Application
+
+Now that your application is deployed, you can easily scale it:
+
+**Scale the backend:**
+
+```bash
+kubectl scale deployment furnet-backend --replicas=2
+```
+
+Watch multiple backend pods start:
+
+```bash
+kubectl get pods -w
+```
+
+The backend Service automatically load-balances between all replicas!
+
+**Scale back down:**
+
+```bash
+kubectl scale deployment furnet-backend --replicas=1
+```
+
+## Next Steps
+
+Congratulations! Your application is now running in Kubernetes with:
+- ✓ Backend deployment serving your API
+- ✓ Frontend deployment serving your React app
+- ✓ Services providing stable network endpoints
+- ✓ Health checks ensuring reliability
+- ✓ Resource limits protecting your cluster
+
+Continue to [Step 6: Put Your App on the Internet](/workshops/6-put-your-app-on-the-internet) to expose your application with HTTPS and automatically provision SSL certificates using cert-manager!
