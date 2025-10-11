@@ -53,10 +53,6 @@ This single command creates:
 - Custom Resource Definitions (CRDs) for certificates and issuers
 - The cert-manager controller and webhook components
 
-**Installing a different version (optional):**
-
-Check available versions at [github.com/cert-manager/cert-manager/releases](https://github.com/cert-manager/cert-manager/releases) and replace the version number in the URL above.
-
 ### Step 2: Verify cert-manager Installation
 
 cert-manager creates three main deployments. Wait for all pods to be ready:
@@ -86,10 +82,15 @@ cert-manager needs an "Issuer" to know where to request certificates from. We'll
 
 **Important**: Replace `your-email@example.com` with your actual email address—Let's Encrypt uses this for certificate expiration notifications.
 
-Create a ClusterIssuer for Let's Encrypt:
+First, create a file for your ClusterIssuer configuration:
 
 ```bash
-cat <<EOF | kubectl apply -f -
+vim letsencrypt-issuer.yaml
+```
+
+Add the following configuration:
+
+```yaml
 apiVersion: cert-manager.io/v1
 kind: ClusterIssuer
 metadata:
@@ -97,14 +98,31 @@ metadata:
 spec:
   acme:
     server: https://acme-v02.api.letsencrypt.org/directory
-    email: your-email@example.com
+    email: your-email@example.com  # CHANGE THIS to your actual email
     privateKeySecretRef:
       name: letsencrypt-prod
     solvers:
     - http01:
         ingress:
           class: traefik
-EOF
+```
+
+**Understanding the ClusterIssuer:**
+
+- `server`: Let's Encrypt's ACME server endpoint (production)
+- `email`: Your email for certificate expiration notifications
+- `privateKeySecretRef`: Where cert-manager stores its private key
+- `solvers`: How cert-manager proves you control the domain (HTTP-01 challenge using Traefik)
+
+Save the file, then apply it to your cluster:
+
+```bash
+kubectl apply -f letsencrypt-issuer.yaml
+```
+
+You should see:
+```
+clusterissuer.cert-manager.io/letsencrypt-prod created
 ```
 
 Verify your issuer is ready:
@@ -140,13 +158,15 @@ Check your deployments:
 kubectl get deployments
 ```
 
-You should see your frontend deployment running. Check your services:
+You should see both your frontend and backend deployments running. Check your services:
 
 ```bash
 kubectl get services
 ```
 
-You should see a `furnet-frontend` service of type `ClusterIP` on port `8080`.
+You should see:
+- `furnet-frontend` service of type `ClusterIP` on port `8080`
+- `furnet-backend` service of type `ClusterIP` on port `8000`
 
 ### Step 5: Understand the Ingress Resource
 
@@ -181,7 +201,7 @@ metadata:
     app: furnet
   annotations:
     # Traefik annotations for k3s
-    traefik.ingress.kubernetes.io/router.entrypoints: websecure
+    traefik.ingress.kubernetes.io/redirect-entry-point: websecure
 
     # cert-manager annotations for automatic TLS certificate provisioning
     cert-manager.io/cluster-issuer: "letsencrypt-prod"
@@ -189,9 +209,10 @@ metadata:
 
 **Understanding the annotations:**
 
-- `traefik.ingress.kubernetes.io/router.entrypoints: websecure`
-  - Tells Traefik to use the HTTPS entrypoint (port 443)
-  - Without this, traffic might only work on HTTP
+- `traefik.ingress.kubernetes.io/redirect-entry-point: websecure`
+  - Automatically redirects HTTP (port 80) traffic to HTTPS (port 443)
+  - Ensures all traffic uses secure connections
+  - Users visiting `http://your-domain.com` will be redirected to `https://your-domain.com`
 
 - `cert-manager.io/cluster-issuer: "letsencrypt-prod"`
   - Tells cert-manager to automatically create a certificate
@@ -250,13 +271,20 @@ When you create this Ingress:
 
 ### Step 10: Define Routing Rules
 
-Add the routing rules to direct traffic to your application:
+Add the routing rules to direct traffic to both your frontend and backend:
 
 ```yaml
   rules:
   - host: dj-viscon-workshop-0.vsos.ethz.ch  # CHANGE THIS to your participant number
     http:
       paths:
+      - path: /api
+        pathType: Prefix
+        backend:
+          service:
+            name: furnet-backend
+            port:
+              number: 8000
       - path: /
         pathType: Prefix
         backend:
@@ -273,46 +301,38 @@ Add the routing rules to direct traffic to your application:
   - Replace with your actual workshop domain
 
 - `http.paths`: List of path-based routing rules
-  - You can have multiple paths routing to different services
+  - **Order matters!** More specific paths should come first
 
-- `path: /`
-  - Match all paths starting with `/` (everything)
+**Backend API Path (`/api`):**
+
+- `path: /api`
+  - Matches all paths starting with `/api`
+  - Examples: `/api/posts`, `/api/users`, `/api/health`
 
 - `pathType: Prefix`
   - Match based on URL path prefix
-  - Other options: `Exact` (exact match), `ImplementationSpecific`
+
+- `backend.service.name: furnet-backend`
+  - Routes API requests to the backend service
+  - The backend service should be running on port `8000`
+
+**Frontend Path (`/`):**
+
+- `path: /`
+  - Matches everything else (the catch-all route)
+  - Must come **after** the `/api` path
 
 - `backend.service.name: furnet-frontend`
-  - The name of your Kubernetes Service
-  - This must match the service you created for your application
+  - Routes all other requests to the frontend service
+  - The frontend service should be running on port `8080`
 
-- `backend.service.port.number: 8080`
-  - The port your service is listening on
-  - This should match your Service's port
+**Why order matters:**
 
-**Path routing examples:**
-
-You could add multiple paths for different services:
-```yaml
-- path: /
-  pathType: Prefix
-  backend:
-    service:
-      name: furnet-frontend
-      port:
-        number: 8080
-- path: /api
-  pathType: Prefix
-  backend:
-    service:
-      name: furnet-backend
-      port:
-        number: 8000
-```
+Traefik evaluates paths in order. If we put `/` first, it would match everything (including `/api` requests) and the backend would never receive traffic. By putting `/api` first, we ensure API requests go to the backend, while everything else goes to the frontend.
 
 ### Step 11: Complete Ingress Manifest
 
-Here's your complete Ingress configuration:
+Here's your complete Ingress configuration with both frontend and backend routing:
 
 ```yaml
 apiVersion: networking.k8s.io/v1
@@ -323,7 +343,7 @@ metadata:
     app: furnet
   annotations:
     # Traefik annotations for k3s
-    traefik.ingress.kubernetes.io/router.entrypoints: websecure
+    traefik.ingress.kubernetes.io/redirect-entry-point: websecure
 
     # cert-manager annotations for automatic TLS certificate provisioning
     cert-manager.io/cluster-issuer: "letsencrypt-prod"
@@ -342,6 +362,15 @@ spec:
   - host: dj-viscon-workshop-0.vsos.ethz.ch  # CHANGE THIS to your actual domain
     http:
       paths:
+      # Backend API - must come first (more specific path)
+      - path: /api
+        pathType: Prefix
+        backend:
+          service:
+            name: furnet-backend
+            port:
+              number: 8000
+      # Frontend - catch-all path (less specific)
       - path: /
         pathType: Prefix
         backend:
@@ -352,6 +381,12 @@ spec:
 ```
 
 **Important:** Replace `dj-viscon-workshop-0.vsos.ethz.ch` with your assigned domain in **both** places (tls.hosts and rules.host).
+
+**What this configuration does:**
+
+- All requests to `https://your-domain.com/api/*` → Backend service on port 8000
+- All other requests to `https://your-domain.com/*` → Frontend service on port 8080
+- Both routes are served over HTTPS with the same certificate
 
 ### Step 12: Apply the Ingress
 
@@ -442,6 +477,10 @@ You should see `tls.crt` and `tls.key` entries. These are your SSL certificate a
 
 ### Step 16: Test Your Application
 
+Now let's test both the frontend and backend through the Ingress!
+
+**Test the Frontend:**
+
 Open your browser and navigate to your domain:
 
 ```
@@ -450,10 +489,26 @@ https://dj-viscon-workshop-0.vsos.ethz.ch
 
 **Expected results:**
 
-- Your application loads over HTTPS
+- Your frontend application loads over HTTPS
 - The browser shows a lock icon (secure connection)
 - No certificate warnings
 - The certificate is issued by "Let's Encrypt"
+
+**Test the Backend API:**
+
+Test the backend API by visiting the API path in your browser or using curl:
+
+```bash
+curl https://dj-viscon-workshop-0.vsos.ethz.ch/api/health
+```
+
+Or open in your browser:
+
+```
+https://dj-viscon-workshop-0.vsos.ethz.ch/api/health
+```
+
+You should see a response from your backend API, confirming that requests to `/api/*` are being routed to the backend service.
 
 **Test the certificate:**
 
@@ -462,15 +517,22 @@ Click the lock icon in your browser and view the certificate details. You should
 - Issued by: Let's Encrypt
 - Valid for: 90 days
 
+**What's happening:**
+
+- Requests to `/` → Frontend (React app)
+- Requests to `/api/*` → Backend (FastAPI)
+- Both use the same HTTPS certificate
+- Both are routed through a single Ingress
+
 ### Understanding HTTP to HTTPS Redirect
 
-By default, Traefik in k3s handles HTTP to HTTPS redirects automatically when TLS is configured. Try visiting:
+Thanks to the `redirect-entry-point: websecure` annotation we configured, Traefik automatically redirects all HTTP traffic to HTTPS. Try visiting:
 
 ```
 http://dj-viscon-workshop-0.vsos.ethz.ch
 ```
 
-You should be automatically redirected to HTTPS.
+You should be automatically redirected to HTTPS. This ensures users always access your application securely, even if they type `http://` in their browser.
 
 ## Troubleshooting
 
@@ -496,26 +558,36 @@ kubectl logs -n cert-manager -l app=cert-manager
 
 ### Problem: "503 Service Unavailable"
 
-Your Ingress is working, but the backend service isn't reachable.
+Your Ingress is working, but one of the backend services isn't reachable.
 
-Check your service:
+Check which service is failing:
+- If it's the homepage: check the frontend service
+- If it's the API: check the backend service
+
+Check your services:
 
 ```bash
 kubectl get service furnet-frontend
 kubectl describe service furnet-frontend
+
+kubectl get service furnet-backend
+kubectl describe service furnet-backend
 ```
 
 Check your pods:
 
 ```bash
 kubectl get pods
-kubectl logs <pod-name>
+kubectl logs <frontend-pod-name>
+kubectl logs <backend-pod-name>
 ```
 
 Ensure:
 - Service selector matches your pod labels
 - Service port matches container port
 - Pods are in `Running` state
+- For backend: API endpoints are correctly exposed on port 8000
+- For frontend: Static files are served on port 8080
 
 ### Problem: "404 Not Found"
 
@@ -553,92 +625,6 @@ Check Traefik is running:
 kubectl get pods -n kube-system | grep traefik
 ```
 
-Check your VM firewall allows ports 80 and 443:
-
-```bash
-sudo ufw status
-```
-
-## Advanced: Multiple Applications
-
-You can create multiple Ingresses for different applications:
-
-```yaml
-# ingress-app1.yaml
-apiVersion: networking.k8s.io/v1
-kind: Ingress
-metadata:
-  name: app1-ingress
-  annotations:
-    cert-manager.io/cluster-issuer: "letsencrypt-prod"
-spec:
-  ingressClassName: traefik
-  tls:
-  - hosts:
-    - app1.example.com
-    secretName: app1-tls-cert
-  rules:
-  - host: app1.example.com
-    http:
-      paths:
-      - path: /
-        pathType: Prefix
-        backend:
-          service:
-            name: app1-service
-            port:
-              number: 80
-```
-
-Each Ingress gets its own certificate automatically managed by cert-manager!
-
-## Congratulations!
-
-You've successfully completed the Cloud-Native DevOps workshop! Your application is now:
-- ✓ Publicly accessible via HTTPS
-- ✓ Protected with a valid SSL certificate from Let's Encrypt
-- ✓ Automatically secured and renewed by cert-manager
-- ✓ Routed efficiently by Traefik
-- ✓ Running on a production-ready Kubernetes cluster
-
-## What You've Accomplished
-
-Through this workshop, you've built a complete DevOps pipeline from scratch:
-
-1. **Infrastructure**: Set up a k3s Kubernetes cluster on a cloud VM
-2. **CI/CD**: Automated Docker image builds with GitHub Actions
-3. **Deployment**: Created Kubernetes Deployments and Services
-4. **Networking**: Exposed your application with Traefik Ingress
-5. **Security**: Automated SSL certificate management with cert-manager
-
-Every time you push code changes to GitHub, your images rebuild automatically. You can then deploy the updated images to your cluster with a simple `kubectl apply`.
-
 ## Next Steps
 
-Want to take your DevOps skills further? Here are some ideas:
-
-**Automation:**
-- Set up automatic deployment on every code push using GitHub Actions
-- Implement GitOps with ArgoCD or Flux
-- Add health checks and readiness probes to your deployments
-
-**Monitoring:**
-- Install Prometheus and Grafana for metrics
-- Set up centralized logging with Loki
-- Configure alerting for critical issues
-
-**Scaling:**
-- Add a HorizontalPodAutoscaler for automatic scaling
-- Implement database persistence with StatefulSets
-- Set up a multi-node k3s cluster
-
-**Advanced Networking:**
-- Configure multiple applications with different domains
-- Set up rate limiting and authentication with Traefik middleware
-- Implement service mesh with Linkerd or Istio
-
-## Thank You!
-
-Thank you for participating in the VIScon 2025 Cloud-Native DevOps workshop! You now have real-world skills and a working pipeline you can use for your own projects. Keep experimenting, keep building, and most importantly—keep learning!
-
-Questions or feedback? Reach out on GitHub or at future VIScon events!
+Congratulations! Your application is now live on the internet with HTTPS. Continue to **Step 7** to review what you've accomplished and explore ideas for taking your DevOps skills even further.

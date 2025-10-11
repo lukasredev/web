@@ -1,34 +1,68 @@
 'use client'
 
-import { useState } from 'react'
+import React, { useState, useRef } from 'react'
 
 export function CodeBlock({ children, ...props }) {
   const [copied, setCopied] = useState(false)
+  const preRef = useRef<HTMLPreElement>(null)
 
   const copyToClipboard = async () => {
-    // Extract text content from the code element
-    // The structure is: <pre><code>text</code></pre>
-    let code = ''
-
-    if (typeof children === 'string') {
-      code = children
-    } else if (children?.props?.children) {
-      const codeContent = children.props.children
-      code = typeof codeContent === 'string' ? codeContent : codeContent?.toString() || ''
-    }
+    // Get the text content directly from the DOM element
+    // This works regardless of how the content is structured
+    const textToCopy = preRef.current?.textContent || ''
 
     try {
-      await navigator.clipboard.writeText(code.trim())
-      setCopied(true)
-      setTimeout(() => setCopied(false), 2000)
+      // Try modern clipboard API first
+      if (navigator.clipboard && window.isSecureContext) {
+        await navigator.clipboard.writeText(textToCopy)
+        setCopied(true)
+        setTimeout(() => setCopied(false), 2000)
+      } else {
+        // Fallback for Safari/older browsers or non-secure contexts
+        const textArea = document.createElement('textarea')
+        textArea.value = textToCopy
+        textArea.style.position = 'fixed'
+        textArea.style.left = '-999999px'
+        textArea.style.top = '-999999px'
+        document.body.appendChild(textArea)
+        textArea.focus()
+        textArea.select()
+
+        try {
+          const successful = document.execCommand('copy')
+          if (successful) {
+            setCopied(true)
+            setTimeout(() => setCopied(false), 2000)
+          }
+        } finally {
+          document.body.removeChild(textArea)
+        }
+      }
     } catch (err) {
       console.error('Failed to copy:', err)
+      // Still try the fallback method
+      try {
+        const textArea = document.createElement('textarea')
+        textArea.value = textToCopy
+        textArea.style.position = 'fixed'
+        textArea.style.left = '-999999px'
+        textArea.style.top = '-999999px'
+        document.body.appendChild(textArea)
+        textArea.focus()
+        textArea.select()
+        document.execCommand('copy')
+        document.body.removeChild(textArea)
+        setCopied(true)
+        setTimeout(() => setCopied(false), 2000)
+      } catch (fallbackErr) {
+        console.error('Fallback copy also failed:', fallbackErr)
+      }
     }
   }
 
   return (
     <div className="relative group">
-      <pre {...props}>
+      <pre ref={preRef} {...props}>
         {children}
       </pre>
       <button

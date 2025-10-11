@@ -580,7 +580,7 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: backend
+  name: furnet-backend
   labels:
     app: furnet
     component: backend
@@ -733,72 +733,6 @@ Look for failed readiness probe events.
 - Application hasn't finished starting
 - Health endpoint is failing
 - Port mismatch in probe configuration
-
-### Problem: Service Not Resolving
-
-Can't reach the service from within the cluster.
-
-**Check service endpoints:**
-
-```bash
-kubectl get endpoints
-```
-
-If endpoints are empty, the service selector doesn't match any pods.
-
-**Verify labels match:**
-
-```bash
-# Check pod labels
-kubectl get pods --show-labels
-
-# Compare with service selector
-kubectl get service <service-name> -o yaml
-```
-
-### Problem: Frontend Can't Reach Backend
-
-Frontend works but API calls fail.
-
-**Check backend service DNS:**
-
-```bash
-kubectl run test-pod --image=curlimages/curl --rm -it -- nslookup backend
-```
-
-Should resolve to the backend service ClusterIP.
-
-**Check backend service is responding:**
-
-```bash
-kubectl run test-pod --image=curlimages/curl --rm -it -- curl http://backend:8000/health/live
-```
-
-Should return `{"status":"alive"}`.
-
-## Scaling Your Application
-
-Now that your application is deployed, you can easily scale it:
-
-**Scale the backend:**
-
-```bash
-kubectl scale deployment furnet-backend --replicas=2
-```
-
-Watch multiple backend pods start:
-
-```bash
-kubectl get pods -w
-```
-
-The backend Service automatically load-balances between all replicas!
-
-**Scale back down:**
-
-```bash
-kubectl scale deployment furnet-backend --replicas=1
-```
 
 ## Next Steps
 
