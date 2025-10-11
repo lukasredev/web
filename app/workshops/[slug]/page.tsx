@@ -11,8 +11,9 @@ export async function generateStaticParams() {
   }))
 }
 
-export function generateMetadata({ params }) {
-  let post = getWorkshopPosts().find((post) => post.slug === params.slug)
+export async function generateMetadata({ params }) {
+  const { slug } = await params
+  let post = getWorkshopPosts().find((post) => post.slug === slug)
   if (!post) {
     return
   }
@@ -51,8 +52,9 @@ export function generateMetadata({ params }) {
   }
 }
 
-export default function Workshop({ params }) {
-  let post = getWorkshopPosts().find((post) => post.slug === params.slug)
+export default async function Workshop({ params }) {
+  const { slug } = await params
+  let post = getWorkshopPosts().find((post) => post.slug === slug)
 
   if (!post) {
     notFound()
