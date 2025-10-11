@@ -527,38 +527,6 @@ Click on each package to see:
 
 ---
 
-## Step 18: Pull and Test Your Images
-
-Now you can pull and run your images from anywhere:
-
-**Backend:**
-```bash
-# Pull the backend image
-docker pull ghcr.io/your-username/furnet/backend:latest
-
-# Run the backend
-docker run -p 8000:8000 ghcr.io/your-username/furnet/backend:latest
-
-# Test it
-curl http://localhost:8000/health
-```
-
-**Frontend:**
-```bash
-# Pull the frontend image
-docker pull ghcr.io/your-username/furnet/frontend:latest
-
-# Run the frontend
-docker run -p 8080:8080 ghcr.io/your-username/furnet/frontend:latest
-
-# Test it
-curl http://localhost:8080/health
-```
-
-**Important:** Replace `your-username` with your actual GitHub username.
-
----
-
 ## Understanding the Complete Pipeline
 
 Now that you've built the workflow, let's understand how everything flows together:
