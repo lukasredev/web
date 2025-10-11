@@ -252,7 +252,7 @@ Start with basic metadata:
 apiVersion: v1
 kind: Service
 metadata:
-  name: backend
+  name: furnet-backend
   labels:
     app: furnet
     component: backend
@@ -260,7 +260,7 @@ metadata:
 
 **What this means:**
 - `kind: Service`: This is a Service resource
-- `name: backend`: DNS name will be `backend` (other pods use `http://backend:8000`)
+- `name: furnet-backend`: DNS name will be `furnet-backend` (other pods use `http://furnet-backend.default.svc.cluster.local:8000`)
 
 Add the service specification:
 
@@ -332,13 +332,13 @@ furnet-backend   1/1     1            1           30s
 Check the service:
 
 ```bash
-kubectl get service backend
+kubectl get service furnet-backend
 ```
 
 Expected output:
 ```
-NAME      TYPE        CLUSTER-IP      EXTERNAL-IP   PORT(S)    AGE
-backend   ClusterIP   10.43.xxx.xxx   <none>        8000/TCP   30s
+NAME             TYPE        CLUSTER-IP      EXTERNAL-IP   PORT(S)    AGE
+furnet-backend   ClusterIP   10.43.xxx.xxx   <none>        8000/TCP   30s
 ```
 
 ### Step 13: Test the Backend
@@ -354,10 +354,12 @@ You should see Uvicorn starting and your application initializing.
 Test the backend from within the cluster:
 
 ```bash
-kubectl run test-pod --image=curlimages/curl --rm -it -- curl http://backend:8000/health/live
+kubectl run test-pod --image=curlimages/curl --rm -it -- curl http://furnet-backend.default.svc.cluster.local:8000/health/live
 ```
 
 You should see: `{"status":"alive"}`
+
+**Note:** The full Kubernetes DNS service name format is `<service-name>.<namespace>.svc.cluster.local`. Since we're deploying to the `default` namespace, the backend service is accessible at `furnet-backend.default.svc.cluster.local`.
 
 ## Part 2: Deploy the Frontend
 
@@ -375,7 +377,7 @@ The frontend deployment is similar to the backend but with key differences:
 - Listens on port 8080 (not 8000)
 
 **Proxy configuration:**
-- nginx is configured to proxy `/api/*` requests to `http://backend:8000`
+- nginx is configured to proxy `/api/*` requests to the backend service
 - This is why the backend Service DNS name matters!
 
 ### Step 15: Create the Frontend Deployment
@@ -492,7 +494,7 @@ kubectl get services
 Expected output:
 ```
 NAME              TYPE        CLUSTER-IP      EXTERNAL-IP   PORT(S)    AGE
-backend           ClusterIP   10.43.xxx.xxx   <none>        8000/TCP   5m
+furnet-backend    ClusterIP   10.43.xxx.xxx   <none>        8000/TCP   5m
 furnet-frontend   ClusterIP   10.43.xxx.xxx   <none>        8080/TCP   30s
 ```
 
@@ -501,7 +503,7 @@ furnet-frontend   ClusterIP   10.43.xxx.xxx   <none>        8080/TCP   30s
 Test that the frontend can reach the backend:
 
 ```bash
-kubectl run test-pod --image=curlimages/curl --rm -it -- curl http://furnet-frontend:8080/health
+kubectl run test-pod --image=curlimages/curl --rm -it -- curl http://furnet-frontend.default.svc.cluster.local:8080/health
 ```
 
 The frontend health endpoint should respond.
