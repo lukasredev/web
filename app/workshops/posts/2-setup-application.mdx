@@ -279,7 +279,7 @@ frontend-1 | Server running on http://0.0.0.0:8080
 Once the containers are running, open your browser and navigate to:
 
 - **Frontend**: [http://localhost:8080](http://localhost:8080)
-- **Backend API**: [http://localhost:8000](http://localhost:8000)
+- **Backend API**: [http://localhost:8080/api](http://localhost:8080/api)
 
 You should see the application's interface in your browser.
 
@@ -290,7 +290,7 @@ Check that your customized animal appears correctly:
 1. **Visit the frontend** at [http://localhost:8080](http://localhost:8080)
    - You should see your animal's name, species, and description
 
-2. **Check the API directly** at [http://localhost:8000/api/me](http://localhost:8000/api/me)
+2. **Check the API directly** at [http://localhost:8080/api/me](http://localhost:8080/api/me)
    - This endpoint returns your animal's full profile as JSON
    - Verify all your customized fields appear correctly
 
@@ -302,7 +302,7 @@ Check that your customized animal appears correctly:
   "name": "Luna",
   "species": "Arctic Fox",
   "description": "A clever arctic fox with brilliant white winter fur and keen problem-solving skills",
-  "instance_url": "http://localhost:8000",
+  "instance_url": "http://localhost:8080/api",
   "habitat": "Arctic tundra and snowy mountains",
   "diet": "Small rodents, birds, and berries",
   "fun_fact": "Arctic foxes can survive temperatures as low as -70°C",
