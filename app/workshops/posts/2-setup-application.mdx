@@ -1,0 +1,226 @@
+---
+title: 'Step 2 - Setup Application Locally - VIScon 2025 Workshop'
+publishedAt: '2025-10-11'
+summary: 'Clone and run the workshop application locally using Docker and Docker Compose.'
+---
+
+# Setup Application Locally
+
+Before we deploy to the cloud, let's get the application running on your local machine. This guide will walk you through cloning the repository, installing Docker, and running the application with Docker Compose.
+
+## Prerequisites
+
+- Git installed on your machine
+- A terminal or command prompt
+- Basic familiarity with command line
+
+## Step 1: Clone the Repository
+
+Open your terminal and clone the workshop application:
+
+```bash
+git clone https://github.com/lukasredev/furnet
+cd furnet
+```
+
+This downloads the application code to your local machine and navigates into the project directory.
+
+## Step 2: Install Docker
+
+Docker packages your application with all its dependencies, making it easy to run consistently across different environments.
+
+### macOS
+
+**Option A: Docker Desktop (Recommended)**
+
+1. Download Docker Desktop from [docker.com/products/docker-desktop](https://www.docker.com/products/docker-desktop/)
+2. Open the downloaded `.dmg` file and drag Docker to your Applications folder
+3. Launch Docker Desktop from Applications
+4. Wait for Docker to start (the whale icon in the menu bar will be steady)
+
+**Option B: Homebrew**
+
+```bash
+brew install --cask docker
+```
+
+### Windows
+
+1. Download Docker Desktop from [docker.com/products/docker-desktop](https://www.docker.com/products/docker-desktop/)
+2. Run the installer
+3. Follow the installation wizard
+4. Restart your computer if prompted
+5. Launch Docker Desktop
+
+**Note:** Docker Desktop on Windows requires WSL 2. The installer will guide you through enabling it if needed.
+
+### Linux
+
+**Ubuntu/Debian:**
+
+```bash
+# Update package index
+sudo apt-get update
+
+# Install dependencies
+sudo apt-get install ca-certificates curl gnupg
+
+# Add Docker's official GPG key
+sudo install -m 0755 -d /etc/apt/keyrings
+curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+sudo chmod a+r /etc/apt/keyrings/docker.gpg
+
+# Set up repository
+echo \
+  "deb [arch="$(dpkg --print-architecture)" signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu \
+  "$(. /etc/os-release && echo "$VERSION_CODENAME")" stable" | \
+  sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+
+# Install Docker
+sudo apt-get update
+sudo apt-get install docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+```
+
+### Verify Docker Installation
+
+Check that Docker is installed correctly:
+
+```bash
+docker --version
+```
+
+You should see output like: `Docker version 24.0.0, build abc1234`
+
+## Step 3: Install Docker Compose
+
+Docker Compose allows you to define and run multi-container applications.
+
+### macOS and Windows
+
+If you installed Docker Desktop, Docker Compose is already included. Verify with:
+
+```bash
+docker compose version
+```
+
+### Linux
+
+Docker Compose is included with recent Docker installations as a plugin. If you followed the installation steps above, you should already have it.
+
+Verify with:
+
+```bash
+docker compose version
+```
+
+If you need to install it separately:
+
+```bash
+sudo apt-get install docker-compose-plugin
+```
+
+## Step 4: Run the Application
+
+Now that everything is installed, start the application:
+
+```bash
+docker compose up --build
+```
+
+**What this command does:**
+- `docker compose up`: Starts all services defined in `docker-compose.yml`
+- `--build`: Rebuilds the Docker images before starting (ensures you have the latest code)
+
+**First run:** This will take a few minutes as Docker downloads base images and builds your containers.
+
+### What You'll See
+
+Docker Compose will output logs from all services. You should see something like:
+
+```
+[+] Building 45.2s
+[+] Running 2/2
+ ✔ Container furnet-backend-1   Started
+ ✔ Container furnet-frontend-1  Started
+Attaching to backend-1, frontend-1
+backend-1  | Server running on http://0.0.0.0:8000
+frontend-1 | Server running on http://0.0.0.0:8080
+```
+
+## Step 5: Access the Application
+
+Once the containers are running, open your browser and navigate to:
+
+- **Frontend**: [http://localhost:8080](http://localhost:8080)
+- **Backend API**: [http://localhost:8000](http://localhost:8000)
+
+You should see the application's interface in your browser.
+
+## Common Commands
+
+### Stop the application
+
+Press `Ctrl+C` in the terminal where Docker Compose is running, or use:
+
+```bash
+docker compose down
+```
+
+### Restart with fresh build
+
+If you make changes to the code:
+
+```bash
+docker compose up --build
+```
+
+### View running containers
+
+```bash
+docker compose ps
+```
+
+## Troubleshooting
+
+### Port already in use
+
+If you see an error like "port is already allocated":
+
+```bash
+# Find what's using the port (macOS/Linux)
+lsof -i :8080
+
+# Windows
+netstat -ano | findstr :8080
+```
+
+Either stop the conflicting process or modify the port in `docker-compose.yml`.
+
+### Permission denied (Linux)
+
+If you get permission errors:
+
+```bash
+# Add your user to the docker group
+sudo usermod -aG docker $USER
+
+# Log out and back in for changes to take effect
+```
+
+### Docker daemon not running
+
+Make sure Docker Desktop is running (macOS/Windows) or start the Docker service (Linux):
+
+```bash
+sudo systemctl start docker
+```
+
+## Next Steps
+
+Now that you have the application running locally, you're ready to:
+1. Set up SSH keys for cloud access
+2. Install k3s on your workshop VM
+3. Create a CI/CD pipeline with GitHub Actions
+4. Deploy to production with Kubernetes
+
+The local setup helps you understand the application before automating its deployment to the cloud.

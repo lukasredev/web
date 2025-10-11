@@ -1,0 +1,370 @@
+---
+title: 'Step 3 - Automate Builds with GitHub Actions - VIScon 2025 Workshop'
+publishedAt: '2025-10-11'
+summary: 'Set up continuous integration to automatically build and publish Docker images on every commit.'
+---
+
+# Automate Builds with GitHub Actions
+
+Every time you push code, GitHub Actions will automatically build your Docker images and publish them to GitHub Container Registry (GHCR). No manual building, no manual pushing—just commit your code and let automation handle the rest.
+
+## What You'll Learn
+
+- How GitHub Actions workflows work and why they're powerful
+- Authentication with GitHub Container Registry
+- Building Docker images in the cloud
+- Automatic image tagging strategies
+- Caching for fast builds
+
+## Prerequisites
+
+- A GitHub repository with your workshop application
+- A Dockerfile in your project (we'll use a simple web app as an example)
+- SSH keys configured and k3s installed on your VM
+
+---
+
+## Step 1: Understanding GitHub Actions
+
+**What are GitHub Actions?**
+
+GitHub Actions is a CI/CD platform that lets you automate workflows directly in your GitHub repository. Think of it as a robot that wakes up when certain events happen (like pushing code) and follows your instructions.
+
+**Key Concepts:**
+
+- **Workflow**: An automated process defined in a YAML file
+- **Job**: A set of steps that run on the same runner
+- **Step**: An individual task (like running a command or using an action)
+- **Action**: A reusable unit of code (like "checkout repository" or "build Docker image")
+- **Runner**: A server that runs your workflows (GitHub provides these for free!)
+
+---
+
+## Step 2: Create the Workflow Directory
+
+First, create the directory structure where GitHub looks for workflows:
+
+```bash
+mkdir -p .github/workflows
+```
+
+**Why `.github/workflows`?**
+
+This is a special directory that GitHub recognizes. Any YAML file in this directory will be treated as a workflow definition.
+
+---
+
+## Step 3: Create the Workflow File
+
+Create a new file called `docker-publish.yml` in the `.github/workflows` directory:
+
+```bash
+touch .github/workflows/docker-publish.yml
+```
+
+**Naming Convention:**
+
+You can name workflow files anything you want, but descriptive names like `docker-publish.yml`, `ci.yml`, or `deploy.yml` help you (and others) understand what they do.
+
+---
+
+## Step 4: Define When the Workflow Runs
+
+Open `docker-publish.yml` and add the following:
+
+```yaml
+name: Build and Push Docker Images
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+```
+
+**What does this mean?**
+
+- `name`: The display name shown in GitHub's Actions tab
+- `on`: Defines when this workflow triggers
+  - `push` to `main` branch → Build and push images
+  - `pull_request` to `main` → Build only (to test, but don't publish)
+
+---
+
+## Step 5: Set Up Environment Variables
+
+Add environment variables that will be used throughout the workflow:
+
+```yaml
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+```
+
+**Breaking it down:**
+
+- `REGISTRY`: GitHub Container Registry URL (`ghcr.io`)
+- `IMAGE_NAME`: Your repository name (e.g., `username/workshop-app`)
+  - `${{ github.repository }}` is a built-in variable that GitHub provides
+
+**Why use variables?**
+
+It makes your workflow flexible and reusable. Change the registry once, and it updates everywhere!
+
+---
+
+## Step 6: Create the Build Job
+
+Now let's create the job to build your application:
+
+```yaml
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+```
+
+**Understanding this code:**
+
+- `jobs`: Contains all the jobs in this workflow
+- `build-and-push`: Job name (descriptive and unique)
+- `runs-on: ubuntu-latest`: Run on Ubuntu (GitHub provides this for free)
+- `permissions`: What this job can access
+  - `contents: read`: Read your repository code
+  - `packages: write`: Publish to GitHub Container Registry
+- `steps`: Individual tasks to perform sequentially
+- `actions/checkout@v4`: Official GitHub action that clones your repository
+
+---
+
+## Step 7: Set Up Docker Buildx
+
+Add the Docker Buildx setup step:
+
+```yaml
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+```
+
+**What is Docker Buildx?**
+
+Buildx is Docker's modern build system that supports:
+- Building for multiple architectures (ARM, x86, etc.)
+- Advanced caching
+- Better performance
+
+**Workshop Note:** Without Buildx, you'd be limited to building for your machine's architecture only!
+
+---
+
+## Step 8: Authenticate with GitHub Container Registry
+
+Add authentication:
+
+```yaml
+      - name: Log in to GitHub Container Registry
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+```
+
+**Breaking it down:**
+
+- `if: github.event_name != 'pull_request'`: Only login when pushing (not on PRs)
+- `registry`: Where to login (ghcr.io)
+- `username`: Your GitHub username (`github.actor` is automatic)
+- `password`: Authentication token
+  - `GITHUB_TOKEN` is **automatically provided** by GitHub - no setup needed!
+
+**Security Note:** Never hardcode passwords! GitHub Actions provides `GITHUB_TOKEN` securely.
+
+---
+
+## Step 9: Generate Image Metadata and Tags
+
+Add metadata extraction:
+
+```yaml
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=ref,event=branch
+            type=sha,prefix={{branch}}-
+            type=raw,value=latest,enable={{is_default_branch}}
+```
+
+**What are these tags?**
+
+This action automatically creates tags based on your Git activity:
+
+- `type=ref,event=branch` → Tag with branch name (e.g., `main`)
+- `type=sha,prefix={{branch}}-` → Tag with commit SHA (e.g., `main-abc1234`)
+- `type=raw,value=latest` → Tag as `latest` on main branch
+
+When you push to `main`, you'll get:
+- `ghcr.io/username/workshop-app:main`
+- `ghcr.io/username/workshop-app:latest`
+- `ghcr.io/username/workshop-app:main-abc1234`
+
+---
+
+## Step 10: Build and Push the Docker Image
+
+Add the build step:
+
+```yaml
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+```
+
+**Understanding the parameters:**
+
+- `context: .`: Build context (the root directory with your code)
+- `file: ./Dockerfile`: Path to your Dockerfile
+- `push: ${{ github.event_name != 'pull_request' }}`: Only push on real commits, not PRs
+- `tags`: Use the tags from the metadata step
+- `labels`: Add metadata labels to the image
+- `cache-from/cache-to`: Use GitHub Actions cache for faster builds
+
+**Why caching matters:** The cache can speed up builds by 10x or more, especially when only a few files change between commits.
+
+---
+
+## Step 11: Commit and Push
+
+Now save your workflow file and push it to GitHub:
+
+```bash
+git add .github/workflows/docker-publish.yml
+git commit -m "feat: add GitHub Actions workflow for Docker builds"
+git push origin main
+```
+
+---
+
+## Step 12: Watch It Build
+
+1. Go to your GitHub repository
+2. Click the **"Actions"** tab
+3. You should see your workflow running!
+4. Click on it to see real-time logs
+
+**What's happening:**
+
+GitHub detected your workflow file and automatically started running it. You'll see:
+- Checkout step cloning your code
+- Docker Buildx being set up
+- Login to GHCR
+- Building your images layer by layer
+- Pushing images to the registry
+
+---
+
+## Step 13: Verify Your Published Images
+
+After the workflow completes:
+
+1. Go to your GitHub profile or repository
+2. Click **"Packages"** (on the right sidebar)
+3. You should see your published image
+
+**Default visibility:** Private
+
+To make them public (so others can pull without authentication):
+1. Click on the package
+2. Click **"Package settings"** (bottom right)
+3. Scroll down to **"Danger Zone"**
+4. Click **"Change visibility"** → **"Public"**
+
+---
+
+## Step 14: Use Your Published Images
+
+Now you can pull and run your image from anywhere:
+
+```bash
+# Pull your image
+docker pull ghcr.io/username/workshop-app:latest
+
+# Run it
+docker run -p 8080:8080 ghcr.io/username/workshop-app:latest
+```
+
+Your k3s cluster can now pull this image directly from GHCR, which we'll configure in the next section when we set up automatic deployments.
+
+---
+
+## Troubleshooting
+
+### Problem: "Permission denied while trying to push"
+
+**Solution:** Check that your workflow has the correct permissions:
+```yaml
+permissions:
+  contents: read
+  packages: write
+```
+
+### Problem: "Image not found when pulling"
+
+**Solution:**
+1. Check if the image is private (requires login):
+   ```bash
+   echo $GITHUB_TOKEN | docker login ghcr.io -u username --password-stdin
+   ```
+2. Verify the image name is correct (go to Packages tab)
+
+### Problem: "Workflow doesn't trigger"
+
+**Solution:**
+1. Ensure the workflow file is in `.github/workflows/`
+2. Check YAML syntax (indentation matters!)
+3. Verify you pushed to a branch listed in the `on:` section
+
+### Problem: "Build is slow"
+
+**Solution:** The first build is always slow. Subsequent builds use cache and are much faster!
+
+---
+
+## Summary
+
+You've now created an automated CI/CD pipeline that builds Docker images on every push and publishes them to GitHub Container Registry. Every commit to your main branch triggers a new build, and the resulting image is immediately available for deployment.
+
+## Next Steps
+
+With your images automatically building and publishing, you're ready to configure k3s to pull and deploy these images. In the next section, we'll set up Kubernetes deployments that automatically update when new images are pushed.
+
+## Future Improvements
+
+Once you're comfortable with the basics, consider these enhancements:
+
+- **Version tags**: Add support for semantic versioning (v1.0.0) to create release-specific images
+- **Multi-architecture builds**: Build for both AMD64 and ARM64 to support different server types
+- **Test jobs**: Run automated tests before building to catch bugs early
+- **Build status badge**: Add a badge to your README showing build status
+- **Dependabot**: Automatically update GitHub Actions versions with pull requests
+- **Multi-stage builds**: Optimize Dockerfile for smaller image sizes and faster builds
+- **Separate environments**: Add staging and production workflows with different configurations

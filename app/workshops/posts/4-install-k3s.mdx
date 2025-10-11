@@ -1,0 +1,109 @@
+---
+title: 'Step 4 - Installing k3s - VIScon 2025 Workshop'
+publishedAt: '2025-10-11'
+summary: 'Set up a lightweight Kubernetes cluster on your workshop VM using k3s.'
+---
+
+# Installing k3s: Lightweight Kubernetes
+
+k3s is a lightweight Kubernetes distribution designed by Rancher Labs. It's perfect for our workshop environment—providing full Kubernetes functionality while using minimal resources. In this guide, you'll install k3s on your assigned VM and verify that your cluster is running.
+
+## Step 0: Connect to Your VM
+
+Each workshop participant has their own virtual machine. Connect using SSH:
+
+```bash
+ssh ubuntu@dj-viscon-workshop-0.vsos.ethz.ch
+```
+
+Replace `0` with your assigned participant number. You'll be working as the `ubuntu` user throughout the workshop.
+
+## Step 1: Install k3s
+
+The official k3s installation script handles everything automatically:
+
+```bash
+curl -sfL https://get.k3s.io | sh -
+```
+
+This single command will:
+- Download the latest k3s binary
+- Configure systemd services
+- Start the k3s server
+
+**Installing a specific version (optional):**
+
+If you need a particular k3s version:
+```bash
+curl -sfL https://get.k3s.io | INSTALL_K3S_VERSION="v1.28.0+k3s1" sh -
+```
+
+## Step 2: Verify Installation
+
+Check that k3s is running:
+
+```bash
+sudo systemctl status k3s
+```
+
+You should see `active (running)` in the output.
+
+Verify your Kubernetes cluster:
+
+```bash
+sudo k3s kubectl get nodes
+```
+
+Your node should appear with status `Ready`. Congratulations—you now have a working Kubernetes cluster!
+
+## Step 3: Simplify kubectl Access
+
+k3s includes kubectl, but it requires `sudo` by default. Create a symlink for easier access:
+
+```bash
+sudo ln -s /usr/local/bin/k3s /usr/local/bin/kubectl
+```
+
+Now you can use standard kubectl commands:
+
+```bash
+kubectl get nodes
+```
+
+For even easier access without sudo, copy the kubeconfig:
+
+```bash
+mkdir -p ~/.kube
+sudo cp /etc/rancher/k3s/k3s.yaml ~/.kube/config
+sudo chown $USER:$USER ~/.kube/config
+```
+
+## Understanding k3s
+
+k3s achieves its lightweight footprint by:
+- Packaging everything into a single binary (< 100MB)
+- Using SQLite instead of etcd by default
+- Removing optional features and cloud provider integrations
+- Including Traefik as the default ingress controller
+
+Despite these optimizations, k3s is fully certified Kubernetes and supports all standard workloads.
+
+## Optional: Multi-Node Setup
+
+While our workshop uses single-node clusters, k3s makes it easy to add worker nodes.
+
+**On the master node**, retrieve the join token:
+```bash
+sudo cat /var/lib/rancher/k3s/server/node-token
+```
+
+**On a worker node**, join the cluster:
+```bash
+curl -sfL https://get.k3s.io | K3S_URL=https://<MASTER_IP>:6443 K3S_TOKEN=<TOKEN> sh -
+```
+
+The worker automatically registers with your cluster.
+
+## Next Steps
+
+With k3s installed and verified, you're ready to start deploying applications. In the next section, we'll set up GitHub Actions to automatically build and deploy your code to this cluster.
