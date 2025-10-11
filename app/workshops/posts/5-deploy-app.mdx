@@ -19,18 +19,18 @@ Before we start creating resources, let's understand what we'll be deploying:
 
 **Services:**
 - Provide stable network endpoints to access pods
-- Enable service discovery via DNS (e.g., `backend:8000`)
+- Enable service discovery via DNS (e.g., `furnet-backend:8000`)
 - Load balance traffic across multiple pod replicas
 
 **Our Architecture:**
 ```
-Frontend Deployment (nginx on port 8080)
+furnet-frontend Deployment (nginx on port 8080)
          ↓
-Frontend Service (provides stable DNS name)
+furnet-frontend Service (provides stable DNS name)
          ↓ (for /api/* requests)
-Backend Service (provides stable DNS name)
+furnet-backend Service (provides stable DNS name)
          ↓
-Backend Deployment (FastAPI on port 8000)
+furnet-backend Deployment (FastAPI on port 8000)
 ```
 
 ## Prerequisites

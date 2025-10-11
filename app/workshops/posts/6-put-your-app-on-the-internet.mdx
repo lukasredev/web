@@ -307,7 +307,7 @@ Add the routing rules to direct traffic to both your frontend and backend:
 
 - `path: /api`
   - Matches all paths starting with `/api`
-  - Examples: `/api/posts`, `/api/users`, `/api/health`
+  - Examples: `/api/posts`, `/api/users`
 
 - `pathType: Prefix`
   - Match based on URL path prefix
@@ -494,21 +494,21 @@ https://dj-viscon-workshop-0.vsos.ethz.ch
 - No certificate warnings
 - The certificate is issued by "Let's Encrypt"
 
-**Test the Backend API:**
+**Test the Backend Health Endpoint:**
 
-Test the backend API by visiting the API path in your browser or using curl:
+Test the backend health endpoint by visiting it in your browser or using curl:
 
 ```bash
-curl https://dj-viscon-workshop-0.vsos.ethz.ch/api/health
+curl https://dj-viscon-workshop-0.vsos.ethz.ch/health
 ```
 
 Or open in your browser:
 
 ```
-https://dj-viscon-workshop-0.vsos.ethz.ch/api/health
+https://dj-viscon-workshop-0.vsos.ethz.ch/health
 ```
 
-You should see a response from your backend API, confirming that requests to `/api/*` are being routed to the backend service.
+You should see a response from your backend health endpoint. Note that health endpoints are typically exposed at the root level for monitoring purposes.
 
 **Test the certificate:**
 
