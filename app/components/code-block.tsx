@@ -2,7 +2,7 @@
 
 import React, { useState, useRef } from 'react'
 
-export function CodeBlock({ children, ...props }) {
+export function CodeBlock({ children, ...props }: React.HTMLAttributes<HTMLPreElement>) {
   const [copied, setCopied] = useState(false)
   const preRef = useRef<HTMLPreElement>(null)
 
