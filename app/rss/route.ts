@@ -1,21 +1,15 @@
-import { baseUrl } from 'app/sitemap'
-import { getBlogPosts } from 'app/blog/utils'
+import { siteConfig } from 'app/config'
+import { getBlogPosts, sortPostsByDate } from 'app/blog/utils'
 
 export async function GET() {
   let allBlogs = await getBlogPosts()
 
-  const itemsXml = allBlogs
-    .sort((a, b) => {
-      if (new Date(a.metadata.publishedAt) > new Date(b.metadata.publishedAt)) {
-        return -1
-      }
-      return 1
-    })
+  const itemsXml = sortPostsByDate(allBlogs)
     .map(
       (post) =>
         `<item>
           <title>${post.metadata.title}</title>
-          <link>${baseUrl}/blog/${post.slug}</link>
+          <link>${siteConfig.url}/blog/${post.slug}</link>
           <description>${post.metadata.summary || ''}</description>
           <pubDate>${new Date(
             post.metadata.publishedAt
@@ -27,9 +21,9 @@ export async function GET() {
   const rssFeed = `<?xml version="1.0" encoding="UTF-8" ?>
   <rss version="2.0">
     <channel>
-        <title>My Portfolio</title>
-        <link>${baseUrl}</link>
-        <description>This is my portfolio RSS feed</description>
+        <title>${siteConfig.name}</title>
+        <link>${siteConfig.url}</link>
+        <description>${siteConfig.description}</description>
         ${itemsXml}
     </channel>
   </rss>`

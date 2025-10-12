@@ -11,7 +11,12 @@ type Metadata = {
 function parseFrontmatter(fileContent: string) {
   let frontmatterRegex = /---\s*([\s\S]*?)\s*---/
   let match = frontmatterRegex.exec(fileContent)
-  let frontMatterBlock = match![1]
+
+  if (!match || !match[1]) {
+    throw new Error('Invalid frontmatter format')
+  }
+
+  let frontMatterBlock = match[1]
   let content = fileContent.replace(frontmatterRegex, '').trim()
   let frontMatterLines = frontMatterBlock.trim().split('\n')
   let metadata: Partial<Metadata> = {}
@@ -55,6 +60,21 @@ export function getBlogPosts() {
 
 export function getWorkshopPosts() {
   return getMDXData(path.join(process.cwd(), 'app', 'workshops', 'posts'))
+}
+
+type Post = {
+  metadata: Metadata
+  slug: string
+  content: string
+}
+
+export function sortPostsByDate(posts: Post[]) {
+  return posts.sort((a, b) => {
+    if (new Date(a.metadata.publishedAt) > new Date(b.metadata.publishedAt)) {
+      return -1
+    }
+    return 1
+  })
 }
 
 export function formatDate(date: string, includeRelative = false) {

@@ -1,7 +1,7 @@
 import { notFound } from 'next/navigation'
 import { CustomMDX } from 'app/components/mdx'
 import { formatDate, getWorkshopPosts } from 'app/blog/utils'
-import { baseUrl } from 'app/sitemap'
+import { siteConfig } from 'app/config'
 
 export async function generateStaticParams() {
   let posts = getWorkshopPosts()
@@ -26,7 +26,7 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
   } = post.metadata
   let ogImage = image
     ? image
-    : `${baseUrl}/og?title=${encodeURIComponent(title)}`
+    : `${siteConfig.url}/og?title=${encodeURIComponent(title)}`
 
   return {
     title,
@@ -36,7 +36,7 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
       description,
       type: 'article',
       publishedTime,
-      url: `${baseUrl}/workshops/${post.slug}`,
+      url: `${siteConfig.url}/workshops/${post.slug}`,
       images: [
         {
           url: ogImage,
@@ -73,12 +73,12 @@ export default async function Workshop({ params }: { params: Promise<{ slug: str
             startDate: post.metadata.publishedAt,
             description: post.metadata.summary,
             image: post.metadata.image
-              ? `${baseUrl}${post.metadata.image}`
+              ? `${siteConfig.url}${post.metadata.image}`
               : `/og?title=${encodeURIComponent(post.metadata.title)}`,
-            url: `${baseUrl}/workshops/${post.slug}`,
+            url: `${siteConfig.url}/workshops/${post.slug}`,
             organizer: {
               '@type': 'Person',
-              name: 'My Portfolio',
+              name: siteConfig.author,
             },
           }),
         }}
