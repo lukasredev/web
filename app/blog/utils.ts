@@ -13,7 +13,7 @@ function parseFrontmatter(fileContent: string) {
   let match = frontmatterRegex.exec(fileContent)
 
   if (!match || !match[1]) {
-    throw new Error('Invalid frontmatter format')
+    throw new Error('Invalid frontmatter format: Missing or malformed frontmatter block')
   }
 
   let frontMatterBlock = match[1]
@@ -21,12 +21,27 @@ function parseFrontmatter(fileContent: string) {
   let frontMatterLines = frontMatterBlock.trim().split('\n')
   let metadata: Partial<Metadata> = {}
 
-  frontMatterLines.forEach((line) => {
-    let [key, ...valueArr] = line.split(': ')
-    let value = valueArr.join(': ').trim()
-    value = value.replace(/^['"](.*)['"]$/, '$1') // Remove quotes
-    metadata[key.trim() as keyof Metadata] = value
-  })
+  try {
+    frontMatterLines.forEach((line) => {
+      let colonIndex = line.indexOf(': ')
+      if (colonIndex === -1) {
+        console.warn(`Skipping invalid frontmatter line: ${line}`)
+        return
+      }
+
+      let key = line.substring(0, colonIndex).trim()
+      let value = line.substring(colonIndex + 2).trim()
+      value = value.replace(/^['"](.*)['"]$/, '$1') // Remove quotes
+      metadata[key as keyof Metadata] = value
+    })
+  } catch (error) {
+    throw new Error(`Failed to parse frontmatter: ${error}`)
+  }
+
+  // Validate required fields
+  if (!metadata.title || !metadata.publishedAt || !metadata.summary) {
+    throw new Error('Missing required frontmatter fields: title, publishedAt, or summary')
+  }
 
   return { metadata: metadata as Metadata, content }
 }
@@ -36,8 +51,12 @@ function getMDXFiles(dir: string) {
 }
 
 function readMDXFile(filePath: string) {
-  let rawContent = fs.readFileSync(filePath, 'utf-8')
-  return parseFrontmatter(rawContent)
+  try {
+    let rawContent = fs.readFileSync(filePath, 'utf-8')
+    return parseFrontmatter(rawContent)
+  } catch (error) {
+    throw new Error(`Failed to read MDX file at ${filePath}: ${error}`)
+  }
 }
 
 function getMDXData(dir: string) {
@@ -84,18 +103,20 @@ export function formatDate(date: string, includeRelative = false) {
   }
   let targetDate = new Date(date)
 
-  let yearsAgo = currentDate.getFullYear() - targetDate.getFullYear()
-  let monthsAgo = currentDate.getMonth() - targetDate.getMonth()
-  let daysAgo = currentDate.getDate() - targetDate.getDate()
+  // Calculate difference in milliseconds
+  const diffInMs = currentDate.getTime() - targetDate.getTime()
+  const diffInDays = Math.floor(diffInMs / (1000 * 60 * 60 * 24))
+  const diffInMonths = Math.floor(diffInDays / 30)
+  const diffInYears = Math.floor(diffInDays / 365)
 
   let formattedDate = ''
 
-  if (yearsAgo > 0) {
-    formattedDate = `${yearsAgo}y ago`
-  } else if (monthsAgo > 0) {
-    formattedDate = `${monthsAgo}mo ago`
-  } else if (daysAgo > 0) {
-    formattedDate = `${daysAgo}d ago`
+  if (diffInYears > 0) {
+    formattedDate = `${diffInYears}y ago`
+  } else if (diffInMonths > 0) {
+    formattedDate = `${diffInMonths}mo ago`
+  } else if (diffInDays > 0) {
+    formattedDate = `${diffInDays}d ago`
   } else {
     formattedDate = 'Today'
   }
