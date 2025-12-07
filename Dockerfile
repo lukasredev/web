@@ -9,6 +9,8 @@ FROM base AS prod-deps
 RUN --mount=type=cache,id=pnpm,target=/pnpm/store pnpm install --prod --frozen-lockfile
 
 FROM base AS build
+ARG COMMIT_HASH
+ENV NEXT_PUBLIC_COMMIT_HASH=$COMMIT_HASH
 RUN --mount=type=cache,id=pnpm,target=/pnpm/store pnpm install --frozen-lockfile
 RUN pnpm run build
 

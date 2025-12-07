@@ -55,6 +55,11 @@ export default function Footer() {
       </ul>
       <p className="mt-8 text-neutral-600 dark:text-neutral-300">
         © {new Date().getFullYear()} MIT Licensed
+        {process.env.NEXT_PUBLIC_COMMIT_HASH && (
+          <span className="ml-2 text-neutral-400 dark:text-neutral-500">
+            ({process.env.NEXT_PUBLIC_COMMIT_HASH})
+          </span>
+        )}
       </p>
     </footer>
   )
