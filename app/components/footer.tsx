@@ -57,7 +57,7 @@ export default function Footer() {
         © {new Date().getFullYear()} MIT Licensed
         {process.env.NEXT_PUBLIC_COMMIT_HASH && (
           <span className="ml-2 text-neutral-400 dark:text-neutral-500">
-            ({process.env.NEXT_PUBLIC_COMMIT_HASH})
+            ({process.env.NEXT_PUBLIC_COMMIT_HASH.slice(0, 7)})
           </span>
         )}
       </p>
