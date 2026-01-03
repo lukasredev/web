@@ -10,6 +10,9 @@ const navItems = {
   '/workshops': {
     name: 'workshops',
   },
+  '/recipes': {
+    name: 'recipes',
+  },
 }
 
 export function Navbar() {

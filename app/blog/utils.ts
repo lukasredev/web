@@ -81,6 +81,10 @@ export function getWorkshopPosts() {
   return getMDXData(path.join(process.cwd(), 'app', 'workshops', 'posts'))
 }
 
+export function getRecipePosts() {
+  return getMDXData(path.join(process.cwd(), 'app', 'recipes', 'posts'))
+}
+
 type Post = {
   metadata: Metadata
   slug: string

@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { formatDate, getBlogPosts, getWorkshopPosts, sortPostsByDate } from 'app/blog/utils'
+import { formatDate, getBlogPosts, getWorkshopPosts, getRecipePosts, sortPostsByDate } from 'app/blog/utils'
 
 type PostListProps = {
   posts: ReturnType<typeof getBlogPosts>
@@ -37,4 +37,8 @@ export function BlogPosts() {
 
 export function WorkshopPosts() {
   return <PostList posts={getWorkshopPosts()} basePath="/workshops" />
+}
+
+export function RecipePosts() {
+  return <PostList posts={getRecipePosts()} basePath="/recipes" />
 }
