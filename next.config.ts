@@ -43,6 +43,11 @@ const nextConfig: NextConfig = {
   typescript: {
     ignoreBuildErrors: false,
   },
+
+  experimental: {
+    // TypeScript 7 no longer ships the compiler API Next.js uses for type checking
+    useTypeScriptCli: true,
+  },
 }
 
 export default nextConfig
