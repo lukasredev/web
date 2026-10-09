@@ -1,0 +1,136 @@
+---
+title: 'Build Your Own RAG Pipeline @ VIScon 2026'
+publishedAt: '2026-10-09'
+summary: 'Build a Retrieval-Augmented Generation pipeline on one of five real datasets, score it on a hidden test set, and find out which changes actually help.'
+---
+
+# Build Your Own RAG Pipeline: From Data to AI-Powered Answers in One Afternoon
+
+A language model on its own is a closed book. It knows a lot, but not your private documents, not anything after its training cutoff, and it can't tell you where an answer comes from. Retrieval-Augmented Generation (RAG) turns it into an open-book exam: **search** for the few passages that answer the question, **paste** them into the prompt, and let the model **answer** from what it read, with citations.
+
+In this workshop, you build a RAG pipeline on a real dataset, score it against a hidden test set, and learn which changes actually move the score.
+
+## Workshop Links
+
+- **Code:** [github.com/lukasredev/rag](https://github.com/lukasredev/rag) has the five tracks with their data, the starting pipelines, and the `ragkit` helper library
+- **RAG Studio:** [viscon-rag.lukasre.ch](https://viscon-rag.lukasre.ch) is a public, read-only RAG Studio to browse the datasets and their test questions in your browser, without installing anything
+- **Leaderboards:** [viscon-eval.lukasre.ch](https://viscon-eval.lukasre.ch) is the evaluation server that scores your submissions on the hidden questions
+
+## How RAG Works
+
+RAG has the same two halves as a search engine: one runs ahead of time, the other for every question.
+
+<IconItem icon="/workshops/rag/chunking.svg" title="Chunking">Ahead of time, cut the documents into chunks</IconItem>
+
+<IconItem icon="/workshops/rag/search-index.svg" title="Indexing">Put the chunks into a search index</IconItem>
+
+<IconItem icon="/workshops/rag/retrieve.svg" title="Retrieval">When a question comes in, retrieve the top chunks for it</IconItem>
+
+<IconItem icon="/workshops/rag/llm.svg" title="Generation">Hand the chunks to the LLM together with the question</IconItem>
+
+<IconItem icon="/workshops/rag/answer.svg" title="Answer with citations">Get back an answer plus the ids of the chunks it used</IconItem>
+
+Everything you do in the workshop is a variation on one of these steps. The retrieval half is exactly what the talk [How Does a Search Engine Work?](/talks/how-search-engines-work) covers.
+
+## What We Cover
+
+- **Chunking:** fixed size, by structure, or with added context like titles and dates. The chunk you retrieve is the chunk the model reads. On the RFC track, cutting along the RFCs' own sections instead of fixed-size chunks put the right section in the top 5 for 95% of questions instead of 17%.
+- **Retrieval:** BM25 wins on names, codes, flags and identifiers; embeddings win when the question and the text use different words. Hybrid fusion and a re-ranker combine both.
+- **The prompt:** three instructions do most of the work: stay grounded in the context, cite the passage ids, and say UNANSWERABLE instead of guessing. Abstaining is a trade-off: the more readily the model says UNANSWERABLE, the more it also refuses questions it could have answered.
+- **Beyond the naive loop:** query rewriting and HyDE, decomposing multi-hop questions, metadata filters, and re-ranking. Each one is a hypothesis, not a best practice: some help, some hurt.
+- **Measuring it:** recall@5 and MRR@10 tell you whether retrieval found the evidence; correctness and abstention rate tell you whether the answer is right. Every score is split by question type, because the average hides the story.
+
+## Know Your Baselines
+
+RAG is not always the answer. Share of questions answered correctly by our reference pipelines with Claude Haiku (the workshop default), on the public test sets:
+
+- **papers:** 0.29 closed book, 0.46 naive RAG, 0.76 good RAG, and **0.89 with the whole paper pasted into the prompt**
+- **technews:** 0.32 closed book, 0.42 naive RAG, **0.89 good RAG**; the whole archive is too big to fit into the prompt
+
+A single paper fits in the context window, so simply pasting all of it beats our best RAG pipeline. RAG earns its keep when the corpus doesn't fit, like 609 news articles. How much the model already knows also depends on the model: with a bigger model, the closed book on papers scored around 0.6, and our naive RAG pipeline scored below it.
+
+So measure the closed book and the simplest idea first, then try to beat them.
+
+## Five Tracks
+
+Every track uses public data with real questions and gold answers, plus a hidden test set on the submission server.
+
+- **papers: Ask the paper.** 200 NLP research papers (Qasper). Answer a question about one paper, cite the paragraphs, or say UNANSWERABLE. The hard part: finding the right 2% of one long paper.
+- **technews: Tech news analyst.** 609 tech news articles from late 2023 (MultiHop-RAG). Combine one to four articles, named by source and date. The hard part: multi-hop questions where source and date are filters, not just words.
+- **rfc: Ask the RFCs.** 44 raw Internet standards: HTTP, TLS, TCP, QUIC, DNS and more. The hard part: messy text, and old versions next to new ones.
+- **shell: Shell command helper.** Man pages of 337 commands (tldr / DocPrompting). A request in plain English in, one bash command out. The hard part: first find the command, then its flags.
+- **codesearch: Where is the code that …?** 10,000 Python functions from 609 GitHub repos (CodeSearchNet). Rank the function a description is about. The hard part: the question's words are not the code's words.
+
+Not sure which one to pick? technews is the classic RAG loop with the biggest visible win, and codesearch is pure retrieval that works even without an LLM budget. You can look through all five datasets in the public [RAG Studio](https://viscon-rag.lukasre.ch) before you decide.
+
+## You Write One Class
+
+Every track has the same contract:
+
+```python
+class Pipeline:
+    def __init__(self, data_dir):
+        # Runs once, a few minutes at most: load the corpus, build the index
+        ...
+
+    def answer(self, question):
+        # Called for every question, 8 at a time
+        return {
+            "answer": "...",
+            "citations": [...],  # ids from the corpus, best first
+        }
+```
+
+You start from a skeleton that works but scores badly, with reference solutions of increasing quality to read once you're stuck. The `ragkit` helper library gives you LLM calls, embeddings, BM25, chunking and metrics. Use it, or anything else.
+
+## The Loop
+
+You spend the afternoon going around one loop:
+
+<IconItem icon="/workshops/rag/documents.svg" title="Run">Run your pipeline on the public test set and step through it in RAG Studio: the query terms, the retrieved chunks with the gold ones marked, the exact prompt, the answer, and the cost</IconItem>
+
+<IconItem icon="/workshops/rag/read-failures.svg" title="Read the failures">Is it retrieval, chunking, the prompt, or the metric?</IconItem>
+
+<IconItem icon="/workshops/rag/hypothesis.svg" title="Write a hypothesis">What you change, and what you expect</IconItem>
+
+<IconItem icon="/workshops/rag/submit.svg" title="Submit">The [evaluation server](https://viscon-eval.lukasre.ch) runs your pipeline on questions you've never seen and puts the score on the leaderboard</IconItem>
+
+Then repeat.
+
+## Workshop Details
+
+- **Date:** 10 October 2026, at VIScon
+- **Prerequisites:** some familiarity with Python
+- **What to bring:** a laptop with [git](https://git-scm.com/downloads) and [uv](https://docs.astral.sh/uv/) installed
+
+## Getting Started
+
+Clone the workshop repository and install it. This downloads about 1 GB, so do it before the workshop if you can:
+
+```bash
+git clone https://github.com/lukasredev/rag.git rag-workshop
+cd rag-workshop
+uv venv --python 3.12 && source .venv/bin/activate
+uv pip install --torch-backend cpu -e ".[local,studio]"
+```
+
+Put the API key and team token you get from the instructors into a `.env` file (the repository's `START_HERE.md` shows how), then check that everything works:
+
+```bash
+python -m ragkit.run --track technews --pipeline tracks/technews/skeleton/pipeline.py --limit 5
+python -m studio
+```
+
+This runs the starting pipeline on 5 questions and opens RAG Studio on your laptop at http://127.0.0.1:8765.
+
+## Who Should Attend
+
+Perfect for students and developers who are curious about how AI-powered question-answering systems actually work behind the hype. Some familiarity with Python is helpful; you work in teams, and every track comes with a working skeleton. Whether you're exploring AI/ML, building side projects, or just want to understand the technology reshaping every industry, this workshop gives you the foundations.
+
+## Takeaways
+
+You leave with a working, measured RAG pipeline, a record of which ideas helped and which didn't, and the habit that matters most: measure before you build, and treat every change as an experiment.
+
+## About the Instructor
+
+My journey with VIS and VSETH (2017-2022) took me from student projects to co-leading the migration of VSETH's infrastructure to a cloud-native Kubernetes setup through the SIP project. Now, as a Solution Architect at DeepJudge, I work on exactly the kind of system we'll be building in this workshop, just at enterprise scale. DeepJudge is a precision AI search platform built by ex-Google search engineers that helps law firms search across millions of documents using RAG and semantic search.

@@ -1,7 +1,7 @@
 import { WorkshopPosts } from 'app/components/posts'
 
 const description =
-  'Hands-on DevOps workshops: SSH, Docker, CI/CD with GitHub Actions, and deploying to Kubernetes (k3s) with HTTPS.'
+  'Hands-on workshops: building a RAG pipeline in Python, and cloud-native DevOps with Docker, GitHub Actions, and Kubernetes (k3s).'
 
 export const metadata = {
   title: 'Workshops',
