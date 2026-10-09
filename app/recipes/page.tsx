@@ -1,8 +1,19 @@
 import { RecipePosts } from 'app/components/posts'
 
+const description = 'Recipes and cooking guides.'
+
 export const metadata = {
   title: 'Recipes',
-  description: 'View my recipes and cooking guides.',
+  description,
+  alternates: {
+    canonical: '/recipes',
+  },
+  openGraph: {
+    title: 'Recipes',
+    description,
+    url: '/recipes',
+    images: ['/og?title=Recipes'],
+  },
 }
 
 export default function Page() {

@@ -1,8 +1,20 @@
 import { WorkshopPosts } from 'app/components/posts'
 
+const description =
+  'Hands-on DevOps workshops: SSH, Docker, CI/CD with GitHub Actions, and deploying to Kubernetes (k3s) with HTTPS.'
+
 export const metadata = {
   title: 'Workshops',
-  description: 'View my workshops and training sessions.',
+  description,
+  alternates: {
+    canonical: '/workshops',
+  },
+  openGraph: {
+    title: 'Workshops',
+    description,
+    url: '/workshops',
+    images: ['/og?title=Workshops'],
+  },
 }
 
 export default function Page() {

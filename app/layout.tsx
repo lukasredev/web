@@ -20,6 +20,10 @@ export const metadata: Metadata = {
     siteName: siteConfig.name,
     locale: 'en_US',
     type: 'website',
+    images: [siteConfig.ogImage],
+  },
+  twitter: {
+    card: 'summary_large_image',
   },
   robots: {
     index: true,
@@ -51,6 +55,8 @@ export default function RootLayout({
       )}
     >
       <head>
+        {/* Set here rather than via metadata.alternates, which pages overwrite with their canonical */}
+        <link rel="alternate" type="application/rss+xml" title={siteConfig.name} href="/rss" />
         {/* Privacy-friendly analytics by Plausible */}
         <script async src="https://analytics.lukasre.ch/js/pa-8JPLTSLrfAOhdlyUQ6R-o.js" />
         <script

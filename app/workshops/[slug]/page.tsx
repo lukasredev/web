@@ -31,6 +31,9 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
   return {
     title,
     description,
+    alternates: {
+      canonical: `/workshops/${post.slug}`,
+    },
     openGraph: {
       title,
       description,
@@ -68,15 +71,16 @@ export default async function Workshop({ params }: { params: Promise<{ slug: str
         dangerouslySetInnerHTML={{
           __html: JSON.stringify({
             '@context': 'https://schema.org',
-            '@type': 'EducationEvent',
-            name: post.metadata.title,
-            startDate: post.metadata.publishedAt,
+            '@type': 'TechArticle',
+            headline: post.metadata.title,
+            datePublished: post.metadata.publishedAt,
+            dateModified: post.metadata.publishedAt,
             description: post.metadata.summary,
             image: post.metadata.image
               ? `${siteConfig.url}${post.metadata.image}`
-              : `/og?title=${encodeURIComponent(post.metadata.title)}`,
+              : `${siteConfig.url}/og?title=${encodeURIComponent(post.metadata.title)}`,
             url: `${siteConfig.url}/workshops/${post.slug}`,
-            organizer: {
+            author: {
               '@type': 'Person',
               name: siteConfig.author,
             },

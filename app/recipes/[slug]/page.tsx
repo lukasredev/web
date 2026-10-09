@@ -31,6 +31,9 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
   return {
     title,
     description,
+    alternates: {
+      canonical: `/recipes/${post.slug}`,
+    },
     openGraph: {
       title,
       description,
@@ -74,7 +77,7 @@ export default async function Recipe({ params }: { params: Promise<{ slug: strin
             description: post.metadata.summary,
             image: post.metadata.image
               ? `${siteConfig.url}${post.metadata.image}`
-              : `/og?title=${encodeURIComponent(post.metadata.title)}`,
+              : `${siteConfig.url}/og?title=${encodeURIComponent(post.metadata.title)}`,
             url: `${siteConfig.url}/recipes/${post.slug}`,
             author: {
               '@type': 'Person',

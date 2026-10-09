@@ -1,9 +1,35 @@
+import type { Metadata } from 'next'
 import { WorkshopPosts } from 'app/components/posts'
 import { siteConfig } from './config'
+
+export const metadata: Metadata = {
+  alternates: {
+    canonical: '/',
+  },
+}
 
 export default function Page() {
   return (
     <section>
+      <script
+        type="application/ld+json"
+        suppressHydrationWarning
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify({
+            '@context': 'https://schema.org',
+            '@type': 'WebSite',
+            name: siteConfig.name,
+            description: siteConfig.description,
+            url: siteConfig.url,
+            author: {
+              '@type': 'Person',
+              name: siteConfig.author,
+              url: siteConfig.url,
+              sameAs: [siteConfig.links.github],
+            },
+          }),
+        }}
+      />
       <h1 className="mb-8 text-2xl font-semibold tracking-tighter">
         {siteConfig.name}
       </h1>

@@ -31,6 +31,9 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
   return {
     title,
     description,
+    alternates: {
+      canonical: `/blog/${post.slug}`,
+    },
     openGraph: {
       title,
       description,
@@ -75,7 +78,7 @@ export default async function Blog({ params }: { params: Promise<{ slug: string 
             description: post.metadata.summary,
             image: post.metadata.image
               ? `${siteConfig.url}${post.metadata.image}`
-              : `/og?title=${encodeURIComponent(post.metadata.title)}`,
+              : `${siteConfig.url}/og?title=${encodeURIComponent(post.metadata.title)}`,
             url: `${siteConfig.url}/blog/${post.slug}`,
             author: {
               '@type': 'Person',

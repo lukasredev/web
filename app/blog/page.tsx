@@ -1,8 +1,20 @@
 import { BlogPosts } from 'app/components/posts'
 
+const description =
+  'Articles on software engineering, cloud-native technologies, and DevOps.'
+
 export const metadata = {
   title: 'Blog',
-  description: 'Read my blog.',
+  description,
+  alternates: {
+    canonical: '/blog',
+  },
+  openGraph: {
+    title: 'Blog',
+    description,
+    url: '/blog',
+    images: ['/og?title=Blog'],
+  },
 }
 
 export default function Page() {
