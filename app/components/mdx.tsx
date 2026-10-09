@@ -49,6 +49,19 @@ function RoundedImage(props: React.ComponentProps<typeof Image>) {
   return <Image {...props} className="rounded-lg" />
 }
 
+function IconItem({ icon, title, children }: { icon: string, title: string, children?: React.ReactNode }) {
+  return (
+    <div className="flex items-center gap-4 my-6">
+      {/* Icons are drawn dark-on-light; invert + hue-rotate keeps the accent color in dark mode */}
+      <img src={icon} alt="" width={48} height={48} className="shrink-0 dark:invert dark:hue-rotate-180" />
+      <div>
+        <div className="font-semibold">{title}</div>
+        <div className="text-neutral-600 dark:text-neutral-400">{children}</div>
+      </div>
+    </div>
+  )
+}
+
 function Code({ children, ...props }: React.HTMLAttributes<HTMLElement> & { children: string }) {
   let codeHTML = highlight(children)
   return <code dangerouslySetInnerHTML={{ __html: codeHTML }} {...props} />
@@ -94,6 +107,7 @@ let components = {
   h5: createHeading(5),
   h6: createHeading(6),
   Image: RoundedImage,
+  IconItem,
   a: CustomLink,
   code: Code,
   pre: CodeBlock,

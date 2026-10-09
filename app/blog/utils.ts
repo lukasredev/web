@@ -77,8 +77,31 @@ export function getBlogPosts() {
   return getMDXData(path.join(process.cwd(), 'app', 'blog', 'posts'))
 }
 
-export function getWorkshopPosts() {
-  return getMDXData(path.join(process.cwd(), 'app', 'workshops', 'posts'))
+// Each workshop is a folder in app/workshops/posts: index.mdx is the overview,
+// the remaining numbered files are its step-by-step guides
+export function getWorkshops() {
+  let dir = path.join(process.cwd(), 'app', 'workshops', 'posts')
+  return fs
+    .readdirSync(dir, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => {
+      let workshopDir = path.join(dir, entry.name)
+      let { metadata, content } = readMDXFile(path.join(workshopDir, 'index.mdx'))
+      let steps = getMDXData(workshopDir)
+        .filter((post) => post.slug !== 'index')
+        .sort((a, b) => a.slug.localeCompare(b.slug, undefined, { numeric: true }))
+
+      return {
+        metadata,
+        slug: entry.name,
+        content,
+        steps,
+      }
+    })
+}
+
+export function getTalkPosts() {
+  return getMDXData(path.join(process.cwd(), 'app', 'talks', 'posts'))
 }
 
 export function getRecipePosts() {

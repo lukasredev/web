@@ -1,19 +1,29 @@
+import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { CustomMDX } from 'app/components/mdx'
-import { formatDate, getWorkshopPosts } from 'app/blog/utils'
+import { formatDate, getWorkshops } from 'app/blog/utils'
 import { siteConfig } from 'app/config'
 
-export async function generateStaticParams() {
-  let posts = getWorkshopPosts()
+type Params = Promise<{ workshop: string; slug: string }>
 
-  return posts.map((post) => ({
-    slug: post.slug,
-  }))
+function getWorkshopStep(workshopSlug: string, slug: string) {
+  let workshop = getWorkshops().find((workshop) => workshop.slug === workshopSlug)
+  let post = workshop?.steps.find((post) => post.slug === slug)
+  return { workshop, post }
 }
 
-export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }) {
-  const { slug } = await params
-  let post = getWorkshopPosts().find((post) => post.slug === slug)
+export async function generateStaticParams() {
+  return getWorkshops().flatMap((workshop) =>
+    workshop.steps.map((post) => ({
+      workshop: workshop.slug,
+      slug: post.slug,
+    }))
+  )
+}
+
+export async function generateMetadata({ params }: { params: Params }) {
+  const { workshop: workshopSlug, slug } = await params
+  let { post } = getWorkshopStep(workshopSlug, slug)
   if (!post) {
     return
   }
@@ -32,14 +42,14 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
     title,
     description,
     alternates: {
-      canonical: `/workshops/${post.slug}`,
+      canonical: `/workshops/${workshopSlug}/${post.slug}`,
     },
     openGraph: {
       title,
       description,
       type: 'article',
       publishedTime,
-      url: `${siteConfig.url}/workshops/${post.slug}`,
+      url: `${siteConfig.url}/workshops/${workshopSlug}/${post.slug}`,
       images: [
         {
           url: ogImage,
@@ -55,11 +65,11 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
   }
 }
 
-export default async function Workshop({ params }: { params: Promise<{ slug: string }> }) {
-  const { slug } = await params
-  let post = getWorkshopPosts().find((post) => post.slug === slug)
+export default async function WorkshopStep({ params }: { params: Params }) {
+  const { workshop: workshopSlug, slug } = await params
+  let { workshop, post } = getWorkshopStep(workshopSlug, slug)
 
-  if (!post) {
+  if (!workshop || !post) {
     notFound()
   }
 
@@ -79,7 +89,7 @@ export default async function Workshop({ params }: { params: Promise<{ slug: str
             image: post.metadata.image
               ? `${siteConfig.url}${post.metadata.image}`
               : `${siteConfig.url}/og?title=${encodeURIComponent(post.metadata.title)}`,
-            url: `${siteConfig.url}/workshops/${post.slug}`,
+            url: `${siteConfig.url}/workshops/${workshop.slug}/${post.slug}`,
             author: {
               '@type': 'Person',
               name: siteConfig.author,
@@ -87,6 +97,12 @@ export default async function Workshop({ params }: { params: Promise<{ slug: str
           }),
         }}
       />
+      <Link
+        href={`/workshops/${workshop.slug}`}
+        className="block mb-4 text-sm text-neutral-600 dark:text-neutral-400 hover:text-neutral-800 dark:hover:text-neutral-200"
+      >
+        ← {workshop.metadata.title}
+      </Link>
       <h1 className="title font-semibold text-2xl tracking-tighter">
         {post.metadata.title}
       </h1>

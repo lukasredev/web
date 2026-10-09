@@ -1,9 +1,16 @@
 import { siteConfig } from 'app/config'
-import { getBlogPosts, getWorkshopPosts } from 'app/blog/utils'
+import { getBlogPosts, getTalkPosts, getWorkshops } from 'app/blog/utils'
+
+const categories = {
+  blog: 'Blog',
+  workshop: 'Workshop',
+  talk: 'Talk',
+}
 
 export async function GET() {
   let allBlogs = await getBlogPosts()
-  let allWorkshops = await getWorkshopPosts()
+  let allWorkshops = await getWorkshops()
+  let allTalks = await getTalkPosts()
 
   const blogItems = allBlogs.map((post) => ({
     ...post,
@@ -11,13 +18,26 @@ export async function GET() {
     path: `/blog/${post.slug}`,
   }))
 
-  const workshopItems = allWorkshops.map((post) => ({
+  const workshopItems = allWorkshops.flatMap((workshop) => [
+    {
+      ...workshop,
+      type: 'workshop' as const,
+      path: `/workshops/${workshop.slug}`,
+    },
+    ...workshop.steps.map((post) => ({
+      ...post,
+      type: 'workshop' as const,
+      path: `/workshops/${workshop.slug}/${post.slug}`,
+    })),
+  ])
+
+  const talkItems = allTalks.map((post) => ({
     ...post,
-    type: 'workshop' as const,
-    path: `/workshops/${post.slug}`,
+    type: 'talk' as const,
+    path: `/talks/${post.slug}`,
   }))
 
-  const allItems = [...blogItems, ...workshopItems]
+  const allItems = [...blogItems, ...workshopItems, ...talkItems]
 
   const itemsXml = allItems
     .sort((a, b) => {
@@ -35,7 +55,7 @@ export async function GET() {
           <pubDate>${new Date(
             item.metadata.publishedAt
           ).toUTCString()}</pubDate>
-          <category>${item.type === 'blog' ? 'Blog' : 'Workshop'}</category>
+          <category>${categories[item.type]}</category>
         </item>`
     )
     .join('\n')

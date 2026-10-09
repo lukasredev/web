@@ -1,5 +1,5 @@
 import type { Metadata } from 'next'
-import { WorkshopPosts } from 'app/components/posts'
+import { TalkPosts, WorkshopPosts } from 'app/components/posts'
 import { siteConfig } from './config'
 
 export const metadata: Metadata = {
@@ -37,6 +37,11 @@ export default function Page() {
         {`I am passionate about using technology to build polished products that solve real-world problems.`}
       </p>
       <div className="my-8">
+        <h2 className="mb-4 text-xl font-semibold tracking-tighter">Talks</h2>
+        <TalkPosts />
+      </div>
+      <div className="my-8">
+        <h2 className="mb-4 text-xl font-semibold tracking-tighter">Workshops</h2>
         <WorkshopPosts />
       </div>
     </section>

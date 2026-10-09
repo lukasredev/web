@@ -39,6 +39,22 @@ const nextConfig: NextConfig = {
     ]
   },
 
+  // The DevOps workshop guides used to live directly under /workshops
+  async redirects() {
+    return [
+      {
+        source: '/workshops/0-viscon-2025',
+        destination: '/workshops/devops',
+        permanent: true,
+      },
+      {
+        source: '/workshops/:slug(\\d+-[a-z0-9-]+)',
+        destination: '/workshops/devops/:slug',
+        permanent: true,
+      },
+    ]
+  },
+
   // TypeScript build-time checking
   typescript: {
     ignoreBuildErrors: false,

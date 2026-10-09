@@ -10,6 +10,9 @@ const navItems = {
   '/workshops': {
     name: 'workshops',
   },
+  '/talks': {
+    name: 'talks',
+  },
   '/recipes': {
     name: 'recipes',
   },

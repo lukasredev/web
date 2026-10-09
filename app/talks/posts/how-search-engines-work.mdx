@@ -1,0 +1,35 @@
+---
+title: 'How Does a Search Engine Work? @ VIScon 2026'
+publishedAt: '2026-10-09'
+summary: 'From a query to the right answer in milliseconds: the core concepts that power every search engine.'
+---
+
+# How Does a Search Engine Work? From a Query to the Right Answer in Milliseconds
+
+Every day we type a few words into a search box and expect the right answer back instantly, out of billions of documents. But what actually happens in those milliseconds? In this talk, we open up the black box and walk through the core concepts that power every search engine, from Google to enterprise AI search.
+
+## Try the Demo
+
+Try out the search engine from the talk yourself: [viscon-search.lukasre.ch](https://viscon-search.lukasre.ch)
+
+## The Journey of a Query
+
+We follow a single query on its journey through a search engine, from the moment you hit enter to the ranked results on your screen.
+
+<IconItem icon="/talks/search/documents.svg" title="Crawling and ingestion">How a search engine discovers and collects the documents it can search over</IconItem>
+
+<IconItem icon="/talks/search/inverted-index.svg" title="Indexing">The inverted index, the data structure that makes searching billions of documents in milliseconds possible</IconItem>
+
+<IconItem icon="/talks/search/split.svg" title="Tokenization and text processing">How raw text becomes something a machine can match against</IconItem>
+
+<IconItem icon="/talks/search/filter.svg" title="Retrieval">Finding the candidate documents that could answer a query</IconItem>
+
+<IconItem icon="/talks/search/rank.svg" title="Ranking">The heart of search: deciding which results actually go on top, and why</IconItem>
+
+## Key Concepts
+
+- Why keyword search (BM25/TF-IDF) and semantic search (embeddings, vector search) solve different problems, and why modern systems combine both
+- What embeddings actually are and how "meaning" becomes math
+- The difference between *retrieval* (finding candidates) and *ranking* (ordering them well)
+- How relevance is measured and why "the right answer" is harder to define than it sounds
+- Where Large Language Models fit into the modern search stack, and how RAG turns search into answers
