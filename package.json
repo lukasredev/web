@@ -13,10 +13,10 @@
     "geist": "1.9.2",
     "next": "canary",
     "next-mdx-remote": "^6.0.0",
-    "postcss": "^8.5.32",
+    "postcss": "^8.5.33",
     "react": "19.3.1",
     "react-dom": "19.3.1",
-    "sugar-high": "^2.6.4",
+    "sugar-high": "^2.7.0",
     "tailwindcss": "4.3.5",
     "typescript": "7.0.2"
   },
